@@ -22,10 +22,14 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
         let int_parser = select! {Token::Int(n) => Expression::Lit(Literal::Nat(n))};
 
         let abs_parser = just(Token::Lambda)
-            .ignore_then(select! {Token::Ident(s) => s})
+            .ignore_then(select! {Token::Ident(s) => s}.repeated().at_least(1))
             .then_ignore(just(Token::Arrow))
             .then(expr.clone())
-            .map(|(s, e)| Expression::Abs(s, Box::new(e)));
+            .map(|(ss, e)| {
+                ss.iter()
+                    .rev()
+                    .fold(e, |e, s| Expression::Abs(s.clone(), Box::new(e)))
+            });
 
         let let_parser = just(Token::Let)
             .ignore_then(select! {Token::Ident(s) => s})
