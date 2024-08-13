@@ -3,6 +3,7 @@ use chumsky::prelude::*;
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 pub enum Token {
     Ident(String),
+    Int(u64),
     Lambda,
     Arrow,
     Let,
@@ -21,6 +22,11 @@ pub fn lexer() -> impl Parser<char, Vec<Token>, Error = Simple<char>> {
         just('=').to(Token::Assign),
         just('(').to(Token::LeftParen),
         just(')').to(Token::RightParen),
+        text::digits(10).try_map(|x: String, span| {
+            x.parse()
+                .map(Token::Int)
+                .map_err(|e| Simple::custom(span, format!("{}", e)))
+        }),
         text::ident().map(Token::Ident),
     ))
     .padded()

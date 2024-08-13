@@ -2,7 +2,13 @@ use crate::lexer::*;
 use chumsky::prelude::*;
 
 #[derive(Clone, Debug)]
+pub enum Literal {
+    Nat(u64),
+}
+
+#[derive(Clone, Debug)]
 pub enum Expression {
+    Lit(Literal),
     Var(String),
     App(Box<Expression>, Box<Expression>),
     Abs(String, Box<Expression>),
@@ -12,6 +18,8 @@ pub enum Expression {
 pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
     recursive(|expr| {
         let var_parser = select! {Token::Ident(s) => Expression::Var(s)};
+
+        let int_parser = select! {Token::Int(n) => Expression::Lit(Literal::Nat(n))};
 
         let abs_parser = just(Token::Lambda)
             .ignore_then(select! {Token::Ident(s) => s})
@@ -29,7 +37,7 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
 
         let paren_parser = expr.delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-        let parser_expr1 = choice((var_parser, abs_parser, let_parser, paren_parser));
+        let parser_expr1 = choice((int_parser, var_parser, abs_parser, let_parser, paren_parser));
 
         parser_expr1
             .clone()
