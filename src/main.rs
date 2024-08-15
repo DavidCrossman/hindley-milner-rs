@@ -9,6 +9,9 @@ fn main() {
 
     if let Ok(tokens) = result {
         let result = parser::parser().parse(tokens);
-        println!("{result:?}");
+        match result {
+            Ok(e) => println!("{e}"),
+            Err(e) => println!("{e:?}"),
+        }
     }
 }
