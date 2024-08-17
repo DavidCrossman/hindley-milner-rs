@@ -4,6 +4,7 @@ use std::fmt::Display;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Literal {
+    Bool(bool),
     Nat(u64),
 }
 
@@ -16,14 +17,23 @@ pub enum Expression {
     Let(String, Box<Expression>, Box<Expression>),
 }
 
+impl Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::Bool(b) => b.fmt(f),
+            Literal::Nat(n) => n.fmt(f),
+        }
+    }
+}
+
 impl Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expression::Lit(Literal::Nat(n)) => n.fmt(f),
-            Expression::Var(s) => s.fmt(f),
+            Expression::Lit(lit) => lit.fmt(f),
+            Expression::Var(x) => x.fmt(f),
             Expression::App(e1, e2) => format!("({e1} {e2})").fmt(f),
-            Expression::Abs(s, e) => format!("λ{s} → {e}").fmt(f),
-            Expression::Let(s, e1, e2) => format!("let {s} = {e1} in {e2}").fmt(f),
+            Expression::Abs(x, e) => format!("λ{x} → {e}").fmt(f),
+            Expression::Let(x, e1, e2) => format!("let {x} = {e1} in {e2}").fmt(f),
         }
     }
 }
@@ -32,7 +42,10 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
     recursive(|expr| {
         let var_parser = select! {Token::Ident(s) => Expression::Var(s)};
 
-        let int_parser = select! {Token::Int(n) => Expression::Lit(Literal::Nat(n))};
+        let literal_parser = select! {
+            Token::Bool(b) => Expression::Lit(Literal::Bool(b)),
+            Token::Int(n) => Expression::Lit(Literal::Nat(n)),
+        };
 
         let abs_parser = just(Token::Lambda)
             .ignore_then(select! {Token::Ident(s) => s}.repeated().at_least(1))
@@ -54,7 +67,13 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
 
         let paren_parser = expr.delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-        let parser_expr1 = choice((int_parser, var_parser, abs_parser, let_parser, paren_parser));
+        let parser_expr1 = choice((
+            literal_parser,
+            var_parser,
+            abs_parser,
+            let_parser,
+            paren_parser,
+        ));
 
         parser_expr1
             .clone()
