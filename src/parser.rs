@@ -2,12 +2,12 @@ use crate::lexer::*;
 use chumsky::prelude::*;
 use std::fmt::Display;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Literal {
     Nat(u64),
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Expression {
     Lit(Literal),
     Var(String),

@@ -1,8 +1,7 @@
+use derive_more::derive::{Deref, DerefMut};
 use std::{collections::HashMap, fmt::Display};
 
-use derive_more::derive::{Deref, DerefMut};
-
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum TypeConstructor {
     Function(Box<MonoType>, Box<MonoType>),
     Int,
@@ -10,19 +9,19 @@ pub enum TypeConstructor {
     List(Box<MonoType>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum MonoType {
     Var(String),
     Con(TypeConstructor),
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum PolyType {
     Mono(MonoType),
     Quantifier(String, Box<PolyType>),
 }
 
-#[derive(Deref, DerefMut, Clone, Debug)]
+#[derive(Default, PartialEq, Eq, Deref, DerefMut, Clone, Debug)]
 pub struct Context(HashMap<String, PolyType>);
 
 impl Display for TypeConstructor {
