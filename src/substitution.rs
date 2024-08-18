@@ -43,9 +43,9 @@ impl Substitute for MonoType {
         match self {
             MonoType::Var(s) if subst.contains_key(s) => *self = subst[s].clone(),
             MonoType::Con(TypeConstructor::List(m)) => m.substitute_mut(subst),
-            MonoType::Con(TypeConstructor::Function(m1, m2)) => {
-                m1.substitute_mut(subst);
-                m2.substitute_mut(subst);
+            MonoType::Con(TypeConstructor::Function(l, r)) => {
+                l.substitute_mut(subst);
+                r.substitute_mut(subst);
             }
             _ => {}
         }
@@ -54,14 +54,9 @@ impl Substitute for MonoType {
 
 impl Substitute for PolyType {
     fn substitute_mut(&mut self, subst: &Substitution) {
-        match self {
-            PolyType::Mono(m) => m.substitute_mut(subst),
-            PolyType::Quantifier(s, p) => {
-                let mut subst = subst.clone();
-                subst.remove(s);
-                p.substitute_mut(&subst);
-            }
-        }
+        let mut subst = subst.clone();
+        subst.retain(|t, _| !self.quantifiers.contains(t));
+        self.mono.substitute_mut(&subst)
     }
 }
 

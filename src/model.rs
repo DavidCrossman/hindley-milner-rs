@@ -16,9 +16,9 @@ pub enum MonoType {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum PolyType {
-    Mono(MonoType),
-    Quantifier(String, Box<PolyType>),
+pub struct PolyType {
+    pub quantifiers: Vec<String>,
+    pub mono: MonoType,
 }
 
 #[derive(Default, PartialEq, Eq, Deref, DerefMut, Clone, Debug)]
@@ -27,10 +27,10 @@ pub struct Context(HashMap<String, PolyType>);
 impl Display for TypeConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeConstructor::Function(a, b) => format!("({a} → {b})").fmt(f),
+            TypeConstructor::Function(l, r) => format!("({l} → {r})").fmt(f),
             TypeConstructor::Int => "Int".fmt(f),
             TypeConstructor::Bool => "Bool".fmt(f),
-            TypeConstructor::List(a) => format!("List {a}").fmt(f),
+            TypeConstructor::List(m) => format!("List {m}").fmt(f),
         }
     }
 }
@@ -38,7 +38,7 @@ impl Display for TypeConstructor {
 impl Display for MonoType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MonoType::Var(a) => a.fmt(f),
+            MonoType::Var(t) => t.fmt(f),
             MonoType::Con(c) => c.fmt(f),
         }
     }
@@ -46,10 +46,10 @@ impl Display for MonoType {
 
 impl Display for PolyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PolyType::Mono(m) => m.fmt(f),
-            PolyType::Quantifier(a, p) => format!("∀{a}. {p}").fmt(f),
+        for t in &self.quantifiers {
+            write!(f, "∀{t}. ")?;
         }
+        write!(f, "{}", self.mono)
     }
 }
 

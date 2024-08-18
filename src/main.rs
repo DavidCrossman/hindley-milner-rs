@@ -19,16 +19,16 @@ fn main() {
         }
     }
 
-    let mut test = PolyType::Quantifier(
-        "x".to_owned(),
-        Box::new(PolyType::Mono(MonoType::Con(TypeConstructor::Function(
+    let mut test = PolyType {
+        quantifiers: vec!["x".to_owned()],
+        mono: MonoType::Con(TypeConstructor::Function(
             Box::new(MonoType::Var("x".to_owned())),
             Box::new(MonoType::Con(TypeConstructor::Function(
                 Box::new(MonoType::Var("y".to_owned())),
                 Box::new(MonoType::Var("z".to_owned())),
             ))),
-        )))),
-    );
+        )),
+    };
 
     let mut sub = Substitution::new();
     sub.insert("x".to_owned(), MonoType::Var("e".to_owned()));
