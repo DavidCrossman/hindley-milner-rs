@@ -38,7 +38,7 @@ impl Display for TypeConstructor {
 impl Display for MonoType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MonoType::Var(s) => s.fmt(f),
+            MonoType::Var(a) => a.fmt(f),
             MonoType::Con(c) => c.fmt(f),
         }
     }
@@ -48,7 +48,7 @@ impl Display for PolyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PolyType::Mono(m) => m.fmt(f),
-            PolyType::Quantifier(s, p) => format!("∀{s}. {p}").fmt(f),
+            PolyType::Quantifier(a, p) => format!("∀{a}. {p}").fmt(f),
         }
     }
 }
