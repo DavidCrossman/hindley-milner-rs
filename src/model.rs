@@ -58,3 +58,39 @@ impl Context {
         Self(HashMap::new())
     }
 }
+
+impl MonoType {
+    pub fn traverse(&mut self, f: &mut impl FnMut(&mut MonoType)) {
+        f(self);
+        match self {
+            MonoType::Var(_) | MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => {}
+            MonoType::Con(TypeConstructor::List(m)) => m.traverse(f),
+            MonoType::Con(TypeConstructor::Function(l, r)) => {
+                l.traverse(f);
+                r.traverse(f);
+            }
+        }
+    }
+
+    pub fn vars(&self) -> impl Iterator<Item = &'_ str> {
+        let iter: Box<dyn Iterator<Item = _>> = match self {
+            MonoType::Var(t) => Box::new(iter::once(t.as_str())),
+            MonoType::Con(TypeConstructor::List(m)) => m.vars(),
+            MonoType::Con(TypeConstructor::Function(l, r)) => Box::new(l.vars().chain(r.vars())),
+            MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => Box::new(iter::empty()),
+        };
+        iter
+    }
+
+    pub fn vars_mut(&mut self) -> impl Iterator<Item = &'_ mut String> {
+        let iter: Box<dyn Iterator<Item = _>> = match self {
+            MonoType::Var(t) => Box::new(iter::once(t)),
+            MonoType::Con(TypeConstructor::List(m)) => m.vars_mut(),
+            MonoType::Con(TypeConstructor::Function(l, r)) => {
+                Box::new(l.vars_mut().chain(r.vars_mut()))
+            }
+            MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => Box::new(iter::empty()),
+        };
+        iter
+    }
+}

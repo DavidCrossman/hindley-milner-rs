@@ -40,15 +40,13 @@ pub trait Substitute {
 
 impl Substitute for MonoType {
     fn substitute_mut(&mut self, subst: &Substitution) {
-        match self {
-            MonoType::Var(s) if subst.contains_key(s) => *self = subst[s].clone(),
-            MonoType::Con(TypeConstructor::List(m)) => m.substitute_mut(subst),
-            MonoType::Con(TypeConstructor::Function(l, r)) => {
-                l.substitute_mut(subst);
-                r.substitute_mut(subst);
+        self.traverse(&mut |m1| {
+            if let MonoType::Var(t) = m1 {
+                if let Some(m2) = subst.get(t) {
+                    *m1 = m2.clone();
+                }
             }
-            _ => {}
-        }
+        });
     }
 }
 
@@ -56,7 +54,7 @@ impl Substitute for PolyType {
     fn substitute_mut(&mut self, subst: &Substitution) {
         let mut subst = subst.clone();
         subst.retain(|t, _| !self.quantifiers.contains(t));
-        self.mono.substitute_mut(&subst)
+        self.mono.substitute_mut(&subst);
     }
 }
 
