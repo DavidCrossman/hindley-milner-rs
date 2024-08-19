@@ -25,6 +25,13 @@ pub struct PolyType {
 #[derive(Default, PartialEq, Eq, Deref, DerefMut, Clone, Debug)]
 pub struct Context(HashMap<String, PolyType>);
 
+#[derive(Clone, Debug)]
+pub enum TypeError {
+    UnknownVariable(String),
+    InfiniteType(String, MonoType),
+    ConstructorConflict(TypeConstructor, TypeConstructor),
+}
+
 impl Display for TypeConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -51,6 +58,16 @@ impl Display for PolyType {
             write!(f, "∀{t}. ")?;
         }
         write!(f, "{}", self.mono)
+    }
+}
+
+impl Display for TypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeError::UnknownVariable(x) => write!(f, "variable {x} is not defined"),
+            TypeError::InfiniteType(t, m) => write!(f, "cannot construct infinite type {t} = {m}"),
+            TypeError::ConstructorConflict(c1, c2) => write!(f, "expected type {c1}, found {c2}"),
+        }
     }
 }
 
