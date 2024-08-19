@@ -6,6 +6,7 @@ mod lexer;
 mod model;
 mod parser;
 mod substitution;
+mod variable;
 
 fn main() {
     let result = lexer::lexer().parse("let x = y (z 5) in λp r -> r p x");
