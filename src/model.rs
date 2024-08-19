@@ -1,5 +1,6 @@
+use crate::variable::{self, FreeVariable};
 use derive_more::derive::{Deref, DerefMut};
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, iter};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum TypeConstructor {
@@ -72,7 +73,7 @@ impl MonoType {
         }
     }
 
-    pub fn vars(&self) -> impl Iterator<Item = &'_ str> {
+    pub fn vars(&self) -> impl Iterator<Item = &str> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             MonoType::Var(t) => Box::new(iter::once(t.as_str())),
             MonoType::Con(TypeConstructor::List(m)) => m.vars(),
@@ -82,7 +83,7 @@ impl MonoType {
         iter
     }
 
-    pub fn vars_mut(&mut self) -> impl Iterator<Item = &'_ mut String> {
+    pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut String> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             MonoType::Var(t) => Box::new(iter::once(t)),
             MonoType::Con(TypeConstructor::List(m)) => m.vars_mut(),
@@ -92,5 +93,21 @@ impl MonoType {
             MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => Box::new(iter::empty()),
         };
         iter
+    }
+}
+
+impl PolyType {
+    pub fn instantiate(mut self, context: &Context) -> MonoType {
+        let mappings = self
+            .quantifiers
+            .into_iter()
+            .zip(variable::fresh_vars(context.free_vars()))
+            .collect::<HashMap<_, _>>();
+        self.mono.vars_mut().for_each(|t1| {
+            if let Some(t2) = mappings.get(t1) {
+                *t1 = t2.to_owned();
+            }
+        });
+        self.mono
     }
 }
