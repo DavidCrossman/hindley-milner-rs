@@ -6,6 +6,7 @@ mod lexer;
 mod model;
 mod parser;
 mod substitution;
+mod unification;
 mod variable;
 
 fn main() {

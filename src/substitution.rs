@@ -5,9 +5,17 @@ use std::collections::HashMap;
 #[derive(Default, PartialEq, Eq, Deref, DerefMut, Clone)]
 pub struct Substitution(HashMap<String, MonoType>);
 
+impl<'a> IntoIterator for &'a Substitution {
+    type Item = (&'a String, &'a MonoType);
+    type IntoIter = std::collections::hash_map::Iter<'a, String, MonoType>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 impl IntoIterator for Substitution {
     type Item = (String, MonoType);
-
     type IntoIter = <HashMap<String, MonoType> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -15,14 +23,26 @@ impl IntoIterator for Substitution {
     }
 }
 
+impl FromIterator<(String, MonoType)> for Substitution {
+    fn from_iter<T: IntoIterator<Item = (String, MonoType)>>(iter: T) -> Self {
+        Self(HashMap::from_iter(iter))
+    }
+}
+
+
 impl Substitution {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
-    pub fn combine(&mut self, other: &Self) {
+    pub fn combine_mut(&mut self, other: &Self) {
         self.values_mut().for_each(|m| m.substitute_mut(other));
-        self.extend(other.clone());
+        self.extend(other.to_owned());
+    }
+
+    pub fn combine(mut self, other: &Self) -> Self {
+        self.combine_mut(other);
+        self
     }
 }
 
