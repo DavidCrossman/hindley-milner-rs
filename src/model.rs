@@ -94,6 +94,13 @@ impl MonoType {
         };
         iter
     }
+
+    pub fn generalise(self, context: &Context) -> PolyType {
+        PolyType {
+            quantifiers: Vec::from_iter(&self.free_vars() - &context.free_vars()),
+            mono: self,
+        }
+    }
 }
 
 impl PolyType {
