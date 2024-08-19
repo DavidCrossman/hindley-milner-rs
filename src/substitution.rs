@@ -1,8 +1,8 @@
 use crate::model::*;
 use derive_more::derive::{Deref, DerefMut};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
-#[derive(Default, PartialEq, Eq, Deref, DerefMut, Clone)]
+#[derive(Default, PartialEq, Eq, Deref, DerefMut, Clone, Debug)]
 pub struct Substitution(HashMap<String, MonoType>);
 
 impl<'a> IntoIterator for &'a Substitution {
@@ -29,6 +29,18 @@ impl FromIterator<(String, MonoType)> for Substitution {
     }
 }
 
+impl Display for Substitution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{{{}}}",
+            self.iter()
+                .map(|(x, m)| format!("{x} -> {m}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+}
 
 impl Substitution {
     pub fn new() -> Self {
