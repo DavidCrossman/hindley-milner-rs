@@ -1,5 +1,5 @@
 use crate::variable::FreeVariable;
-use std::{collections::HashMap, fmt::Display, iter};
+use std::{collections::HashMap, fmt::Display, iter, ops::Add};
 
 #[derive(Hash, Clone, PartialEq, Eq, Debug)]
 pub enum TypeVariable {
@@ -34,7 +34,7 @@ pub struct Context {
 
 #[derive(Clone, Debug)]
 pub enum TypeError {
-    UnknownVariable(TypeVariable),
+    UnknownVariable(String),
     InfiniteType(TypeVariable, MonoType),
     ConstructorConflict(TypeConstructor, TypeConstructor),
 }
@@ -172,5 +172,14 @@ impl From<MonoType> for PolyType {
             quantifiers: Default::default(),
             mono: value,
         }
+    }
+}
+
+impl<P: Into<PolyType>> Add<(String, P)> for Context {
+    type Output = Self;
+
+    fn add(mut self, (v, p): (String, P)) -> Self::Output {
+        self.env.insert(v, p.into());
+        self
     }
 }
