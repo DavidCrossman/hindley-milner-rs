@@ -1,6 +1,11 @@
-use crate::variable::{self, FreeVariable};
-use derive_more::derive::{Deref, DerefMut};
+use crate::variable::FreeVariable;
 use std::{collections::HashMap, fmt::Display, iter};
+
+#[derive(Hash, Clone, PartialEq, Eq, Debug)]
+pub enum TypeVariable {
+    UserDefined(String),
+    Inferred(usize),
+}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum TypeConstructor {
@@ -12,24 +17,35 @@ pub enum TypeConstructor {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum MonoType {
-    Var(String),
+    Var(TypeVariable),
     Con(TypeConstructor),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PolyType {
-    pub quantifiers: Vec<String>,
+    pub quantifiers: Vec<TypeVariable>,
     pub mono: MonoType,
 }
 
-#[derive(Default, PartialEq, Eq, Deref, DerefMut, Clone, Debug)]
-pub struct Context(HashMap<String, PolyType>);
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
+pub struct Context {
+    pub env: HashMap<String, PolyType>,
+}
 
 #[derive(Clone, Debug)]
 pub enum TypeError {
-    UnknownVariable(String),
-    InfiniteType(String, MonoType),
+    UnknownVariable(TypeVariable),
+    InfiniteType(TypeVariable, MonoType),
     ConstructorConflict(TypeConstructor, TypeConstructor),
+}
+
+impl Display for TypeVariable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeVariable::UserDefined(s) => s.fmt(f),
+            TypeVariable::Inferred(n) => write!(f, "τ{n}"),
+        }
+    }
 }
 
 impl Display for TypeConstructor {
@@ -73,7 +89,9 @@ impl Display for TypeError {
 
 impl Context {
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self {
+            env: HashMap::new(),
+        }
     }
 }
 
@@ -90,9 +108,9 @@ impl MonoType {
         }
     }
 
-    pub fn vars(&self) -> impl Iterator<Item = &str> {
+    pub fn vars(&self) -> impl Iterator<Item = &TypeVariable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
-            MonoType::Var(t) => Box::new(iter::once(t.as_str())),
+            MonoType::Var(t) => Box::new(iter::once(t)),
             MonoType::Con(TypeConstructor::List(m)) => m.vars(),
             MonoType::Con(TypeConstructor::Function(l, r)) => Box::new(l.vars().chain(r.vars())),
             MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => Box::new(iter::empty()),
@@ -100,7 +118,7 @@ impl MonoType {
         iter
     }
 
-    pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut String> {
+    pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut TypeVariable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             MonoType::Var(t) => Box::new(iter::once(t)),
             MonoType::Con(TypeConstructor::List(m)) => m.vars_mut(),
@@ -121,11 +139,11 @@ impl MonoType {
 }
 
 impl PolyType {
-    pub fn instantiate(mut self, context: &Context) -> MonoType {
+    pub fn instantiate(mut self, next_fresh: usize) -> MonoType {
         let mappings = self
             .quantifiers
             .into_iter()
-            .zip(variable::fresh_vars(context.free_vars()))
+            .zip((next_fresh..).map(TypeVariable::Inferred))
             .collect::<HashMap<_, _>>();
         self.mono.vars_mut().for_each(|t1| {
             if let Some(t2) = mappings.get(t1) {
@@ -133,5 +151,26 @@ impl PolyType {
             }
         });
         self.mono
+    }
+}
+
+impl From<TypeVariable> for MonoType {
+    fn from(value: TypeVariable) -> Self {
+        Self::Var(value)
+    }
+}
+
+impl From<TypeConstructor> for MonoType {
+    fn from(value: TypeConstructor) -> Self {
+        Self::Con(value)
+    }
+}
+
+impl From<MonoType> for PolyType {
+    fn from(value: MonoType) -> Self {
+        Self {
+            quantifiers: Default::default(),
+            mono: value,
+        }
     }
 }

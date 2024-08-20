@@ -32,7 +32,7 @@ impl Display for Expression {
             Expression::Lit(lit) => lit.fmt(f),
             Expression::Var(x) => x.fmt(f),
             Expression::App(e1, e2) => format!("({e1} {e2})").fmt(f),
-            Expression::Abs(x, e) => format!("λ{x} → {e}").fmt(f),
+            Expression::Abs(x, e) => format!("(λ{x} → {e})").fmt(f),
             Expression::Let(x, e1, e2) => format!("let {x} = {e1} in {e2}").fmt(f),
         }
     }

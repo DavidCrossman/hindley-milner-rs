@@ -5,7 +5,7 @@ pub fn unify(m1: MonoType, m2: MonoType) -> Result<Substitution, TypeError> {
     match (m1, m2) {
         (m1, m2) if m1 == m2 => Ok(Substitution::new()),
         (MonoType::Var(t), m) => {
-            if m.vars().any(|t2| t == t2) {
+            if m.vars().any(|t2| &t == t2) {
                 Err(TypeError::InfiniteType(t, m))
             } else {
                 Ok([(t, m)].into_iter().collect())
