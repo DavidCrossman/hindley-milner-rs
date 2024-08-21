@@ -30,12 +30,27 @@ impl Display for Literal {
 
 impl Display for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Expression::*;
         match self {
-            Expression::Lit(lit) => lit.fmt(f),
-            Expression::Var(x) => x.fmt(f),
-            Expression::App(e1, e2) => format!("({e1} {e2})").fmt(f),
-            Expression::Abs(x, e) => format!("(λ{x} → {e})").fmt(f),
-            Expression::Let(x, e1, e2) => format!("let {x} = {e1} in {e2}").fmt(f),
+            Lit(lit) => lit.fmt(f),
+            Var(x) => x.fmt(f),
+            App(e1, e2) => match **e1 {
+                Lit(_) | Var(_) => match **e2 {
+                    Lit(_) | Var(_) | Abs(_, _) | Let(_, _, _) => write!(f, "{e1} {e2}"),
+                    App(_, _) => write!(f, "{e1} ({e2})"),
+                },
+                Abs(_, _) | Let(_, _, _) => match **e2 {
+                    Lit(_) | Var(_) | Abs(_, _) | Let(_, _, _) => write!(f, "({e1}) {e2}"),
+                    App(_, _) => write!(f, "({e1}) ({e2})"),
+                },
+                App(_, _) => match **e2 {
+                    Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
+                    Abs(_, _) | Let(_, _, _) => write!(f, "({e1}) {e2}"),
+                    App(_, _) => write!(f, "{e1} ({e2})"),
+                },
+            },
+            Abs(x, e) => write!(f, "λ{x} → {e}"),
+            Let(x, e1, e2) => write!(f, "let {x} = {e1} in {e2}"),
         }
     }
 }
