@@ -67,13 +67,7 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
 
         let paren_parser = expr.delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-        let expr1_parser = choice((
-            literal_parser,
-            var_parser,
-            abs_parser,
-            let_parser,
-            paren_parser,
-        ));
+        let expr1_parser = choice((literal_parser, var_parser, abs_parser, let_parser, paren_parser));
 
         expr1_parser
             .clone()

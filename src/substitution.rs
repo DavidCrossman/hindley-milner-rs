@@ -50,9 +50,7 @@ impl Display for Substitution {
 
 impl Substitution {
     pub fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
+        Self { map: HashMap::new() }
     }
 
     pub fn combine_mut(&mut self, other: &Self) {

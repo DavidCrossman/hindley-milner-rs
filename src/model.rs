@@ -89,9 +89,7 @@ impl Display for TypeError {
 
 impl Context {
     pub fn new() -> Self {
-        Self {
-            env: HashMap::new(),
-        }
+        Self { env: HashMap::new() }
     }
 }
 
@@ -122,9 +120,7 @@ impl MonoType {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             MonoType::Var(t) => Box::new(iter::once(t)),
             MonoType::Con(TypeConstructor::List(m)) => m.vars_mut(),
-            MonoType::Con(TypeConstructor::Function(l, r)) => {
-                Box::new(l.vars_mut().chain(r.vars_mut()))
-            }
+            MonoType::Con(TypeConstructor::Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
             MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => Box::new(iter::empty()),
         };
         iter

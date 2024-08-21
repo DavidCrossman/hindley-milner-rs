@@ -19,9 +19,6 @@ impl FreeVariable for PolyType {
 
 impl FreeVariable for Context {
     fn free_vars(&self) -> HashSet<TypeVariable> {
-        self.env
-            .values()
-            .flat_map(FreeVariable::free_vars)
-            .collect()
+        self.env.values().flat_map(FreeVariable::free_vars).collect()
     }
 }
