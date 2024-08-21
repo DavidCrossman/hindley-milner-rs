@@ -4,6 +4,7 @@ use std::fmt::Display;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Literal {
+    Unit,
     Bool(bool),
     Nat(u64),
 }
@@ -20,6 +21,7 @@ pub enum Expression {
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Literal::Unit => "()".fmt(f),
             Literal::Bool(b) => b.fmt(f),
             Literal::Nat(n) => n.fmt(f),
         }
@@ -43,6 +45,7 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
         let var_parser = select! {Token::Ident(s) => Expression::Var(s)};
 
         let literal_parser = select! {
+            Token::Unit => Expression::Lit(Literal::Unit),
             Token::Bool(b) => Expression::Lit(Literal::Bool(b)),
             Token::Int(n) => Expression::Lit(Literal::Nat(n)),
         };

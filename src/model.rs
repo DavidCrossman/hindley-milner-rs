@@ -9,9 +9,10 @@ pub enum TypeVariable {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum TypeConstructor {
-    Function(Box<MonoType>, Box<MonoType>),
-    Int,
+    Unit,
     Bool,
+    Int,
+    Function(Box<MonoType>, Box<MonoType>),
     List(Box<MonoType>),
 }
 
@@ -51,9 +52,10 @@ impl Display for TypeVariable {
 impl Display for TypeConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeConstructor::Function(l, r) => format!("({l} → {r})").fmt(f),
+            TypeConstructor::Unit => "Unit".fmt(f),
             TypeConstructor::Int => "Int".fmt(f),
             TypeConstructor::Bool => "Bool".fmt(f),
+            TypeConstructor::Function(l, r) => format!("({l} → {r})").fmt(f),
             TypeConstructor::List(m) => format!("List {m}").fmt(f),
         }
     }
@@ -95,11 +97,12 @@ impl Context {
 
 impl MonoType {
     pub fn traverse(&mut self, f: &mut impl FnMut(&mut MonoType)) {
+        use TypeConstructor::*;
         f(self);
         match self {
-            MonoType::Var(_) | MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => {}
-            MonoType::Con(TypeConstructor::List(m)) => m.traverse(f),
-            MonoType::Con(TypeConstructor::Function(l, r)) => {
+            MonoType::Var(_) | MonoType::Con(Unit | Bool | Int) => {}
+            MonoType::Con(List(m)) => m.traverse(f),
+            MonoType::Con(Function(l, r)) => {
                 l.traverse(f);
                 r.traverse(f);
             }
@@ -107,21 +110,23 @@ impl MonoType {
     }
 
     pub fn vars(&self) -> impl Iterator<Item = &TypeVariable> {
+        use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             MonoType::Var(t) => Box::new(iter::once(t)),
-            MonoType::Con(TypeConstructor::List(m)) => m.vars(),
-            MonoType::Con(TypeConstructor::Function(l, r)) => Box::new(l.vars().chain(r.vars())),
-            MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => Box::new(iter::empty()),
+            MonoType::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            MonoType::Con(List(m)) => m.vars(),
+            MonoType::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
         };
         iter
     }
 
     pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut TypeVariable> {
+        use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             MonoType::Var(t) => Box::new(iter::once(t)),
-            MonoType::Con(TypeConstructor::List(m)) => m.vars_mut(),
-            MonoType::Con(TypeConstructor::Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
-            MonoType::Con(TypeConstructor::Bool | TypeConstructor::Int) => Box::new(iter::empty()),
+            MonoType::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            MonoType::Con(List(m)) => m.vars_mut(),
+            MonoType::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
         };
         iter
     }

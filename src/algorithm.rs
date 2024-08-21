@@ -9,6 +9,7 @@ pub fn w(
         Expression::Lit(lit) => Ok((
             Substitution::new(),
             MonoType::Con(match lit {
+                Literal::Unit => TypeConstructor::Unit,
                 Literal::Bool(_) => TypeConstructor::Bool,
                 Literal::Nat(_) => TypeConstructor::Int,
             }),
@@ -58,6 +59,7 @@ pub fn m(
         Expression::Lit(lit) => unify(
             t,
             MonoType::Con(match lit {
+                Literal::Unit => TypeConstructor::Unit,
                 Literal::Bool(_) => TypeConstructor::Bool,
                 Literal::Nat(_) => TypeConstructor::Int,
             }),

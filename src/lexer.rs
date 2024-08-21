@@ -3,6 +3,7 @@ use chumsky::prelude::*;
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 pub enum Token {
     Ident(String),
+    Unit,
     Bool(bool),
     Int(u64),
     Lambda,
@@ -20,6 +21,7 @@ pub fn lexer() -> impl Parser<char, Vec<Token>, Error = Simple<char>> {
         text::keyword("in").to(Token::In),
         text::keyword("true").to(Token::Bool(true)),
         text::keyword("false").to(Token::Bool(false)),
+        just("()").to(Token::Unit),
         one_of("λ\\").to(Token::Lambda),
         just("->").or(just("→")).to(Token::Arrow),
         just('=').to(Token::Assign),

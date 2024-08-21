@@ -11,7 +11,7 @@ mod unification;
 mod variable;
 
 fn main() {
-    match lexer::lexer().parse("let id = λx -> x in (λa b -> a) (id true) (id 0)") {
+    match lexer::lexer().parse("let id = λx -> x in (λa b -> a) (id ()) (id 0)") {
         Ok(tokens) => match parser::parser().parse(tokens) {
             Ok(expr) => {
                 println!("type checking expression: {expr}");
