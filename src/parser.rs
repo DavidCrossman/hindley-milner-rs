@@ -36,8 +36,8 @@ impl Display for Expression {
             Var(x) => x.fmt(f),
             App(e1, e2) => match **e1 {
                 Lit(_) | Var(_) => match **e2 {
-                    Lit(_) | Var(_) | Abs(_, _) | Let(_, _, _) => write!(f, "{e1} {e2}"),
-                    App(_, _) => write!(f, "{e1} ({e2})"),
+                    Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
+                    App(_, _) | Abs(_, _) | Let(_, _, _) => write!(f, "{e1} ({e2})"),
                 },
                 Abs(_, _) | Let(_, _, _) => match **e2 {
                     Lit(_) | Var(_) | Abs(_, _) | Let(_, _, _) => write!(f, "({e1}) {e2}"),
@@ -45,8 +45,7 @@ impl Display for Expression {
                 },
                 App(_, _) => match **e2 {
                     Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
-                    Abs(_, _) | Let(_, _, _) => write!(f, "({e1}) {e2}"),
-                    App(_, _) => write!(f, "{e1} ({e2})"),
+                    App(_, _) | Abs(_, _) | Let(_, _, _) => write!(f, "{e1} ({e2})"),
                 },
             },
             Abs(x, e) => write!(f, "λ{x} → {e}"),
