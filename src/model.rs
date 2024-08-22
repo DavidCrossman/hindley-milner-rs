@@ -51,12 +51,19 @@ impl Display for TypeVariable {
 
 impl Display for TypeConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use TypeConstructor::*;
         match self {
-            TypeConstructor::Unit => "Unit".fmt(f),
-            TypeConstructor::Int => "Int".fmt(f),
-            TypeConstructor::Bool => "Bool".fmt(f),
-            TypeConstructor::Function(l, r) => format!("({l} → {r})").fmt(f),
-            TypeConstructor::List(m) => format!("List {m}").fmt(f),
+            Unit => "Unit".fmt(f),
+            Int => "Int".fmt(f),
+            Bool => "Bool".fmt(f),
+            Function(l, r) => match **l {
+                MonoType::Con(Function(_, _)) => write!(f, "({l}) → {r}"),
+                MonoType::Var(_) | MonoType::Con(_) => write!(f, "{l} → {r}"),
+            },
+            List(m) => match **m {
+                MonoType::Con(Function(_, _)) => write!(f, "List ({m})"),
+                MonoType::Var(_) | MonoType::Con(_) => write!(f, "List {m}"),
+            },
         }
     }
 }
