@@ -33,7 +33,7 @@ pub fn w(
             )?;
             Ok((s1.combine(&s2.combine(&s3)), beta.substitute(&s3), n + 1))
         }
-        Expression::Abs(x, e) => {
+        Expression::Abs(x, e) | Expression::Closure(x, e, _) => {
             let beta = MonoType::Var(TypeVariable::Inferred(n));
             let (s, m, n) = w(&(context.clone() + (x.clone(), beta.clone())), e, n + 1)?;
             let m = MonoType::Con(TypeConstructor::Function(Box::new(beta), Box::new(m)));
@@ -76,7 +76,7 @@ pub fn m(
             let (s2, n) = m(&context.clone().substitute(&s1), e2, beta.substitute(&s1), n)?;
             Ok((s1.combine(&s2), n))
         }
-        Expression::Abs(x, e) => {
+        Expression::Abs(x, e) | Expression::Closure(x, e, _) => {
             let beta1 = MonoType::Var(TypeVariable::Inferred(n));
             let beta2 = MonoType::Var(TypeVariable::Inferred(n + 1));
             let t2 = TypeConstructor::Function(Box::new(beta1.clone()), Box::new(beta2.clone())).into();

@@ -3,6 +3,7 @@ use model::*;
 use substitution::Substitute;
 
 mod algorithm;
+mod interpreter;
 mod lexer;
 mod model;
 mod parser;
@@ -24,6 +25,11 @@ fn main() {
                 let t = MonoType::Var(TypeVariable::UserDefined("a".to_owned()));
                 match algorithm::m(&Context::new(), &expr, t.clone(), 0) {
                     Ok((s, _)) => println!("type: {}", t.substitute(&s)),
+                    Err(e) => println!("error: {e}"),
+                }
+                println!("evalutation");
+                match interpreter::eval(&expr) {
+                    Ok(e) => println!("success: {e}"),
                     Err(e) => println!("error: {e}"),
                 }
             }

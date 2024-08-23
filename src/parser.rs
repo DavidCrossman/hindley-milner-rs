@@ -1,6 +1,6 @@
 use crate::lexer::*;
 use chumsky::prelude::*;
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Literal {
@@ -16,7 +16,11 @@ pub enum Expression {
     App(Box<Expression>, Box<Expression>),
     Abs(String, Box<Expression>),
     Let(String, Box<Expression>, Box<Expression>),
+    Closure(String, Box<Expression>, Environment),
 }
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Environment(pub HashMap<String, Expression>);
 
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -33,24 +37,55 @@ impl Display for Expression {
         use Expression::*;
         match self {
             Lit(lit) => lit.fmt(f),
+            Closure(x, e, env) => write!(f, "λ{env} {x} → {e}"),
             Var(x) => x.fmt(f),
             App(e1, e2) => match **e1 {
                 Lit(_) | Var(_) => match **e2 {
                     Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
-                    App(_, _) | Abs(_, _) | Let(_, _, _) => write!(f, "{e1} ({e2})"),
+                    App(..) | Abs(..) | Let(..) | Closure(..) => write!(f, "{e1} ({e2})"),
                 },
-                Abs(_, _) | Let(_, _, _) => match **e2 {
-                    Lit(_) | Var(_) | Abs(_, _) | Let(_, _, _) => write!(f, "({e1}) {e2}"),
-                    App(_, _) => write!(f, "({e1}) ({e2})"),
+                Abs(..) | Let(..) | Closure(..) => match **e2 {
+                    Lit(_) | Var(_) | Abs(..) | Let(..) | Closure(..) => write!(f, "({e1}) {e2}"),
+                    App(..) => write!(f, "({e1}) ({e2})"),
                 },
-                App(_, _) => match **e2 {
+                App(..) => match **e2 {
                     Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
-                    App(_, _) | Abs(_, _) | Let(_, _, _) => write!(f, "{e1} ({e2})"),
+                    App(..) | Abs(..) | Let(..) | Closure(..) => write!(f, "{e1} ({e2})"),
                 },
             },
             Abs(x, e) => write!(f, "λ{x} → {e}"),
             Let(x, e1, e2) => write!(f, "let {x} = {e1} in {e2}"),
         }
+    }
+}
+
+impl Display for Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}]",
+            self.0
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
+    }
+}
+
+impl Expression {
+    pub fn is_value(&self) -> bool {
+        use Expression::*;
+        match self {
+            Lit(_) | Closure(..) => true,
+            Var(_) | App(..) | Abs(..) | Let(..) => false,
+        }
+    }
+}
+
+impl Environment {
+    pub fn new() -> Self {
+        Self(HashMap::new())
     }
 }
 
