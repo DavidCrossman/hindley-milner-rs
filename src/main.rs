@@ -27,7 +27,7 @@ fn main() {
                     Ok((s, _)) => println!("type: {}", t.substitute(&s)),
                     Err(e) => println!("error: {e}"),
                 }
-                println!("evalutation");
+                println!("evaluation");
                 match interpreter::eval(&expr) {
                     Ok(e) => println!("success: {e}"),
                     Err(e) => println!("error: {e}"),

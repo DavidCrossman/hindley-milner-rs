@@ -17,6 +17,7 @@ pub enum Expression {
     Abs(String, Box<Expression>),
     Let(String, Box<Expression>, Box<Expression>),
     Closure(String, Box<Expression>, Environment),
+    Fix(String, String, Box<Expression>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -37,24 +38,25 @@ impl Display for Expression {
         use Expression::*;
         match self {
             Lit(lit) => lit.fmt(f),
-            Closure(x, e, env) => write!(f, "λ{env} {x} → {e}"),
             Var(x) => x.fmt(f),
             App(e1, e2) => match **e1 {
                 Lit(_) | Var(_) => match **e2 {
                     Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
-                    App(..) | Abs(..) | Let(..) | Closure(..) => write!(f, "{e1} ({e2})"),
+                    App(..) | Abs(..) | Let(..) | Closure(..) | Fix(..) => write!(f, "{e1} ({e2})"),
                 },
-                Abs(..) | Let(..) | Closure(..) => match **e2 {
-                    Lit(_) | Var(_) | Abs(..) | Let(..) | Closure(..) => write!(f, "({e1}) {e2}"),
+                Abs(..) | Let(..) | Closure(..) | Fix(..) => match **e2 {
+                    Lit(_) | Var(_) | Abs(..) | Let(..) | Closure(..) | Fix(..) => write!(f, "({e1}) {e2}"),
                     App(..) => write!(f, "({e1}) ({e2})"),
                 },
                 App(..) => match **e2 {
                     Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
-                    App(..) | Abs(..) | Let(..) | Closure(..) => write!(f, "{e1} ({e2})"),
+                    App(..) | Abs(..) | Let(..) | Closure(..) | Fix(..) => write!(f, "{e1} ({e2})"),
                 },
             },
             Abs(x, e) => write!(f, "λ{x} → {e}"),
             Let(x, e1, e2) => write!(f, "let {x} = {e1} in {e2}"),
+            Closure(x, e, env) => write!(f, "λ{env} {x} → {e}"),
+            Fix(fun, x, e) => write!(f, "fix {fun} λ{x} → {e}"),
         }
     }
 }
@@ -78,7 +80,7 @@ impl Expression {
         use Expression::*;
         match self {
             Lit(_) | Closure(..) => true,
-            Var(_) | App(..) | Abs(..) | Let(..) => false,
+            Var(_) | App(..) | Abs(..) | Let(..) | Fix(..) => false,
         }
     }
 }
@@ -117,9 +119,29 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
             .then(expr.clone())
             .map(|((x, e1), e2)| Expression::Let(x, Box::new(e1), Box::new(e2)));
 
+        let let_rec_parser = just(Token::Let)
+            .ignore_then(just(Token::Rec))
+            .ignore_then(select! {Token::Ident(f) => f})
+            .then(select! {Token::Ident(x) => x})
+            .then_ignore(just(Token::Assign))
+            .then(expr.clone())
+            .then_ignore(just(Token::In))
+            .then(expr.clone())
+            .map(|(((f, x), e1), e2)| {
+                let e1 = Expression::Fix(f.clone(), x, Box::new(e1));
+                Expression::Let(f, Box::new(e1), Box::new(e2))
+            });
+
         let paren_parser = expr.delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-        let expr1_parser = choice((literal_parser, var_parser, abs_parser, let_parser, paren_parser));
+        let expr1_parser = choice((
+            literal_parser,
+            var_parser,
+            abs_parser,
+            let_parser,
+            let_rec_parser,
+            paren_parser,
+        ));
 
         expr1_parser
             .clone()

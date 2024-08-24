@@ -61,6 +61,10 @@ fn eval1(s: State) -> Result<State, EvalError> {
             e => Ok((e, Environment::new(), k)),
         },
         (Abs(x, e), env, k) => Ok((Closure(x, e, env), Environment::new(), k)),
+        (Fix(f, x, e), mut env, k) => {
+            env.0.insert(f.clone(), Fix(f, x.clone(), e.clone()));
+            Ok((Closure(x, e, env), Environment::new(), k))
+        }
         (App(e1, e2), env, mut k) => {
             k.push(Frame::HApp(*e2, env.clone()));
             Ok((*e1, env, k))

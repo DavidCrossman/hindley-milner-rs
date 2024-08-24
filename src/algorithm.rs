@@ -46,6 +46,13 @@ pub fn w(
             let (s2, m2, n) = w(&(context + (x.clone(), p)), e2, n)?;
             Ok((s1.combine(&s2), m2, n))
         }
+        Expression::Fix(f, x, e) => {
+            let beta = MonoType::Var(TypeVariable::Inferred(n));
+            let context = context.clone() + (f.clone(), beta.clone());
+            let (s1, m1, n) = w(&context, &Expression::Abs(x.clone(), e.clone()), n + 1)?;
+            let s2 = unify(beta.substitute(&s1), m1.clone())?;
+            Ok((s1.combine(&s2), m1.substitute(&s2), n))
+        }
     }
 }
 
@@ -92,6 +99,10 @@ pub fn m(
             let p = beta.substitute(&s1).generalise(&context);
             let (s2, n) = m(&(context + (x.clone(), p)), e2, t.substitute(&s1), n)?;
             Ok((s1.combine(&s2), n))
+        }
+        Expression::Fix(f, x, e) => {
+            let context = context.clone() + (f.clone(), t.clone());
+            m(&context, &Expression::Abs(x.clone(), e.clone()), t, n)
         }
     }
 }
