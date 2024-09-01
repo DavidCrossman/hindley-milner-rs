@@ -9,7 +9,6 @@ pub enum Token {
     Lambda,
     Arrow,
     Let,
-    Rec,
     Assign,
     In,
     LeftParen,
@@ -19,7 +18,6 @@ pub enum Token {
 pub fn lexer() -> impl Parser<char, Vec<Token>, Error = Simple<char>> {
     choice((
         text::keyword("let").to(Token::Let),
-        text::keyword("rec").to(Token::Rec),
         text::keyword("in").to(Token::In),
         text::keyword("true").to(Token::Bool(true)),
         text::keyword("false").to(Token::Bool(false)),

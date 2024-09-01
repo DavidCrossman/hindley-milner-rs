@@ -30,7 +30,7 @@ pub struct PolyType {
 
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub struct Context {
-    pub env: HashMap<String, PolyType>,
+    pub map: HashMap<String, PolyType>,
 }
 
 #[derive(Clone, Debug)]
@@ -98,7 +98,7 @@ impl Display for TypeError {
 
 impl Context {
     pub fn new() -> Self {
-        Self { env: HashMap::new() }
+        Self { map: HashMap::new() }
     }
 }
 
@@ -140,7 +140,12 @@ impl MonoType {
 
     pub fn generalise(self, context: &Context) -> PolyType {
         PolyType {
-            quantifiers: Vec::from_iter(&self.free_vars() - &context.free_vars()),
+            quantifiers: self
+                .free_vars()
+                .difference(&context.free_vars())
+                .copied()
+                .cloned()
+                .collect(),
             mono: self,
         }
     }

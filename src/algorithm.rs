@@ -15,7 +15,7 @@ pub fn w(
             }),
             n,
         )),
-        Expression::Var(x) => match context.env.get(x) {
+        Expression::Var(x) => match context.map.get(x) {
             Some(p) => Ok((
                 Substitution::new(),
                 p.clone().instantiate(n),
@@ -72,7 +72,7 @@ pub fn m(
             }),
         )
         .map(|s| (s, n)),
-        Expression::Var(x) => match context.env.get(x) {
+        Expression::Var(x) => match context.map.get(x) {
             Some(p) => unify(t, p.clone().instantiate(n)).map(|s| (s, n + p.quantifiers.len())),
             None => Err(TypeError::UnknownVariable(x.clone())),
         },

@@ -1,4 +1,4 @@
-use crate::lexer::*;
+use crate::{lexer::*, variable::FreeVariable};
 use chumsky::prelude::*;
 use std::{collections::HashMap, fmt::Display};
 
@@ -106,9 +106,9 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
             .then_ignore(just(Token::Arrow))
             .then(expr.clone())
             .map(|(xs, e)| {
-                xs.iter()
+                xs.into_iter()
                     .rev()
-                    .fold(e, |e, x| Expression::Abs(x.to_owned(), Box::new(e)))
+                    .fold(e, |e, x| Expression::Abs(x, Box::new(e)))
             });
 
         let let_parser = just(Token::Let)
@@ -119,29 +119,30 @@ pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
             .then(expr.clone())
             .map(|((x, e1), e2)| Expression::Let(x, Box::new(e1), Box::new(e2)));
 
-        let let_rec_parser = just(Token::Let)
-            .ignore_then(just(Token::Rec))
+        let let_parser = let_parser.or(just(Token::Let)
             .ignore_then(select! {Token::Ident(f) => f})
             .then(select! {Token::Ident(x) => x})
+            .then(select! {Token::Ident(x) => x}.repeated())
             .then_ignore(just(Token::Assign))
             .then(expr.clone())
             .then_ignore(just(Token::In))
             .then(expr.clone())
-            .map(|(((f, x), e1), e2)| {
-                let e1 = Expression::Fix(f.clone(), x, Box::new(e1));
+            .map(|((((f, x), xs), e1), e2)| {
+                let e1 = xs
+                    .into_iter()
+                    .rev()
+                    .fold(e1, |e, x| Expression::Abs(x, Box::new(e)));
+                let e1 = if f != x && e1.free_vars().contains(&f) {
+                    Expression::Fix(f.clone(), x, Box::new(e1))
+                } else {
+                    Expression::Abs(x, Box::new(e1))
+                };
                 Expression::Let(f, Box::new(e1), Box::new(e2))
-            });
+            }));
 
         let paren_parser = expr.delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-        let expr1_parser = choice((
-            literal_parser,
-            var_parser,
-            abs_parser,
-            let_parser,
-            let_rec_parser,
-            paren_parser,
-        ));
+        let expr1_parser = choice((literal_parser, var_parser, abs_parser, let_parser, paren_parser));
 
         expr1_parser
             .clone()

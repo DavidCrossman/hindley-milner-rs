@@ -98,6 +98,6 @@ impl Substitute for PolyType {
 
 impl Substitute for Context {
     fn substitute_mut(&mut self, subst: &Substitution) {
-        self.env.values_mut().for_each(|m| m.substitute_mut(subst));
+        self.map.values_mut().for_each(|m| m.substitute_mut(subst));
     }
 }
