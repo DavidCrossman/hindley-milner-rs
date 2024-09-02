@@ -22,7 +22,7 @@ pub enum Expression {
     Fix(String, String, Box<Expression>),
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub struct Environment(pub HashMap<String, Expression>);
 
 pub type Program = Vec<(String, Expression)>;

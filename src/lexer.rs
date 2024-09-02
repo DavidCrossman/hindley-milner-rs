@@ -51,6 +51,7 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> {
         just('=').to(Token::Assign),
         just('(').to(Token::LeftParen),
         just(')').to(Token::RightParen),
+        just(';').to(Token::Separator),
         text::digits(10).try_map(|x: String, span| {
             x.parse()
                 .map(Token::Int)

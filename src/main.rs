@@ -1,13 +1,12 @@
-mod expression;
-mod interpreter;
-mod lexer;
-mod parser;
-mod type_checking;
+pub mod expression;
+pub mod interpreter;
+pub mod lexer;
+pub mod parser;
+pub mod type_checking;
 
 fn main() {
     let source = r"
-        id x = x
-        const x y = x
+        id x = x; const x y = x;
         flip f x y = f y x
         main = flip const (id 0) (id true)
     ";
