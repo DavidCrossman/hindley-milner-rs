@@ -1,4 +1,5 @@
-use crate::{model::*, parser::*, substitution::*, unification::*};
+use super::{model::*, substitution::*, unification::unify};
+use crate::expression::{Expression, Literal};
 
 pub fn w(
     context: &Context,

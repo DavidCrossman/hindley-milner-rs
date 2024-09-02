@@ -1,23 +1,8 @@
-mod algorithm;
+mod expression;
 mod interpreter;
 mod lexer;
-mod model;
 mod parser;
-mod substitution;
-mod unification;
-mod variable;
-
-use model::*;
-use parser::Program;
-
-fn type_check(program: &Program) -> Result<Context, TypeError> {
-    let mut context = Context::new();
-    for (name, expr) in program {
-        let (_, m, _) = algorithm::w(&context, expr, 0)?;
-        context += (name.clone(), m.generalise(&context));
-    }
-    Ok(context)
-}
+mod type_checking;
 
 fn main() {
     let source = r"
@@ -28,7 +13,7 @@ fn main() {
     ";
     match lexer::lex(source) {
         Ok(tokens) => match parser::parse(&tokens) {
-            Ok(program) => match type_check(&program) {
+            Ok(program) => match type_checking::type_check(&program) {
                 Ok(_) => match interpreter::run(&program) {
                     Ok(e) => println!("{e}"),
                     Err(e) => println!("runtime error: {e}"),

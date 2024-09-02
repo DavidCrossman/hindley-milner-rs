@@ -1,8 +1,6 @@
-use crate::model::*;
-use std::{
-    collections::hash_map::{self, HashMap},
-    fmt::Display,
-};
+use super::model::{Context, MonoType, PolyType, TypeVariable};
+use std::collections::hash_map::{self, HashMap};
+use std::fmt::Display;
 
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub struct Substitution {

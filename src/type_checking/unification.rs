@@ -1,5 +1,5 @@
-use crate::model::*;
-use crate::substitution::*;
+use super::model::{MonoType, TypeConstructor, TypeError};
+use super::substitution::*;
 
 pub fn unify(m1: MonoType, m2: MonoType) -> Result<Substitution, TypeError> {
     match (m1, m2) {
