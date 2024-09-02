@@ -23,6 +23,8 @@ pub enum Expression {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Environment(pub HashMap<String, Expression>);
 
+pub type Program = Vec<(String, Expression)>;
+
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -97,14 +99,16 @@ impl Environment {
     }
 }
 
-pub fn parser() -> impl Parser<Token, Vec<(String, Expression)>, Error = Simple<Token>> {
-    let def_parser = just(Token::Def)
-        .ignore_then(select! {Token::Ident(x) => x})
+pub fn parse(tokens: &[Token]) -> Result<Program, Vec<Simple<Token>>> {
+    program_parser().parse(tokens)
+}
+
+fn program_parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
+    let def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
         .then(expr_parser());
 
-    let def_parser = def_parser.or(just(Token::Def)
-        .ignore_then(select! {Token::Ident(f) => f})
+    let def_parser = def_parser.or(select! {Token::Ident(f) => f}
         .then(select! {Token::Ident(x) => x})
         .then(select! {Token::Ident(x) => x}.repeated())
         .then_ignore(just(Token::Assign))
@@ -122,7 +126,10 @@ pub fn parser() -> impl Parser<Token, Vec<(String, Expression)>, Error = Simple<
             (f, e)
         }));
 
-    def_parser.repeated().then_ignore(end())
+    def_parser
+        .separated_by(just(Token::Separator))
+        .padded_by(just(Token::Separator).repeated())
+        .then_ignore(end())
 }
 
 fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {

@@ -7,11 +7,10 @@ mod substitution;
 mod unification;
 mod variable;
 
-use chumsky::Parser;
 use model::*;
-use parser::Expression;
+use parser::Program;
 
-fn type_check(program: &[(String, Expression)]) -> Result<Context, TypeError> {
+fn type_check(program: &Program) -> Result<Context, TypeError> {
     let mut context = Context::new();
     for (name, expr) in program {
         let (_, m, _) = algorithm::w(&context, expr, 0)?;
@@ -22,13 +21,13 @@ fn type_check(program: &[(String, Expression)]) -> Result<Context, TypeError> {
 
 fn main() {
     let source = r"
-        def id x = x
-        def const x y = x
-        def flip f x y = f y x
-        def main = flip const (id 0) (id true)
+        id x = x
+        const x y = x
+        flip f x y = f y x
+        main = flip const (id 0) (id true)
     ";
-    match lexer::lexer().parse(source) {
-        Ok(tokens) => match parser::parser().parse(tokens) {
+    match lexer::lex(source) {
+        Ok(tokens) => match parser::parse(&tokens) {
             Ok(program) => match type_check(&program) {
                 Ok(_) => match interpreter::run(&program) {
                     Ok(e) => println!("{e}"),

@@ -1,4 +1,4 @@
-use crate::parser::{Environment, Expression};
+use crate::parser::{Environment, Expression, Program};
 use std::fmt::Display;
 
 #[derive(Clone, Debug)]
@@ -43,7 +43,7 @@ impl Display for EvalError {
     }
 }
 
-pub fn run(program: &[(String, Expression)]) -> Result<Expression, EvalError> {
+pub fn run(program: &Program) -> Result<Expression, EvalError> {
     let (_, expr_main) = program
         .iter()
         .find(|(name, _)| name == "main")
