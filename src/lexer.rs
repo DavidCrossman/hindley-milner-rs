@@ -13,6 +13,7 @@ pub enum Token {
     Bool(bool),
     Int(u64),
     Ident(String),
+    Discard,
     Separator,
 }
 
@@ -39,7 +40,11 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
     Ok(tokens)
 }
 
-fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> {
+fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone {
+    let ident_lexer = filter(|c: &char| c.is_ascii_alphabetic())
+        .chain::<char, _, _>(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
+        .collect();
+
     let token_lexer = choice((
         text::keyword("let").to(Token::Let),
         text::keyword("in").to(Token::In),
@@ -57,7 +62,10 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> {
                 .map(Token::Int)
                 .map_err(|e| Simple::custom(span, format!("{}", e)))
         }),
-        text::ident().map(Token::Ident),
+        ident_lexer.map(Token::Ident),
+        just('_')
+            .then(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
+            .to(Token::Discard),
     ));
 
     let tokens_lexer = token_lexer

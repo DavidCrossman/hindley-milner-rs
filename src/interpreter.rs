@@ -1,4 +1,4 @@
-use crate::expression::{Environment, Expression, Program};
+use crate::expression::{Binding, Environment, Expression, Program};
 use std::fmt::Display;
 
 #[derive(Clone, Debug)]
@@ -90,8 +90,10 @@ fn eval1(s: State) -> Result<State, EvalError> {
                 k.push(Frame::AppH(v));
                 Ok((e, env, k))
             }
-            Some(Frame::AppH(Closure(x, e, mut env))) => {
-                env.0.insert(x, v);
+            Some(Frame::AppH(Closure(b, e, mut env))) => {
+                if let Binding::Var(x) = b {
+                    env.0.insert(x, v);
+                }
                 Ok((*e, env, k))
             }
             Some(f) => {

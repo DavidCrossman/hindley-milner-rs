@@ -12,14 +12,20 @@ pub enum Literal {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
+pub enum Binding {
+    Var(String),
+    Discard,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Expression {
     Lit(Literal),
     Var(String),
     App(Box<Expression>, Box<Expression>),
-    Abs(String, Box<Expression>),
-    Let(String, Box<Expression>, Box<Expression>),
-    Closure(String, Box<Expression>, Environment),
-    Fix(String, String, Box<Expression>),
+    Abs(Binding, Box<Expression>),
+    Let(Binding, Box<Expression>, Box<Expression>),
+    Closure(Binding, Box<Expression>, Environment),
+    Fix(String, Binding, Box<Expression>),
 }
 
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
@@ -33,6 +39,15 @@ impl Display for Literal {
             Literal::Unit => "()".fmt(f),
             Literal::Bool(b) => b.fmt(f),
             Literal::Nat(n) => n.fmt(f),
+        }
+    }
+}
+
+impl Display for Binding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Binding::Var(x) => x.fmt(f),
+            Binding::Discard => "_".fmt(f),
         }
     }
 }
@@ -79,6 +94,12 @@ impl Display for Environment {
     }
 }
 
+impl From<String> for Binding {
+    fn from(value: String) -> Self {
+        Self::Var(value)
+    }
+}
+
 impl FromIterator<(String, Expression)> for Environment {
     fn from_iter<T: IntoIterator<Item = (String, Expression)>>(iter: T) -> Self {
         Self(HashMap::from_iter(iter))
@@ -95,17 +116,22 @@ impl Expression {
     }
 
     pub fn free_vars(&self) -> HashSet<&String> {
+        use Expression::*;
         match self {
-            Expression::Lit(_) => HashSet::new(),
-            Expression::Var(v) => [v].into(),
-            Expression::App(e1, e2) => e1.free_vars().union(&e2.free_vars()).copied().collect(),
-            Expression::Abs(x, e) => &e.free_vars() - &[x].into(),
-            Expression::Let(x, e1, e2) => (&e2.free_vars() - &[x].into())
+            Lit(_) => HashSet::new(),
+            Var(v) => [v].into(),
+            App(e1, e2) => e1.free_vars().union(&e2.free_vars()).copied().collect(),
+            Abs(Binding::Var(x), e) => &e.free_vars() - &[x].into(),
+            Abs(Binding::Discard, e) => e.free_vars(),
+            Let(Binding::Var(x), e1, e2) => (&e2.free_vars() - &[x].into())
                 .union(&e1.free_vars())
                 .copied()
                 .collect(),
-            Expression::Closure(x, e, env) => &e.free_vars() - &env.0.keys().chain(iter::once(x)).collect(),
-            Expression::Fix(f, x, e) => &e.free_vars() - &[f, x].into(),
+            Let(Binding::Discard, e1, e2) => e2.free_vars().union(&e1.free_vars()).copied().collect(),
+            Closure(Binding::Var(x), e, env) => &e.free_vars() - &env.0.keys().chain(iter::once(x)).collect(),
+            Closure(Binding::Discard, e, env) => &e.free_vars() - &env.0.keys().collect(),
+            Fix(f, Binding::Var(x), e) => &e.free_vars() - &[f, x].into(),
+            Fix(f, Binding::Discard, e) => &e.free_vars() - &[f].into(),
         }
     }
 }

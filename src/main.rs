@@ -6,7 +6,7 @@ pub mod type_checking;
 
 fn main() {
     let source = r"
-        id x = x; const x y = x;
+        id x = x; const x _ = x;
         flip f x y = f y x
         main = flip const (id 0) (id true)
     ";

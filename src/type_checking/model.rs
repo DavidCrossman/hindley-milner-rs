@@ -89,7 +89,7 @@ impl Display for PolyType {
 impl Display for TypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeError::UnknownVariable(x) => write!(f, "variable {x} is not defined"),
+            TypeError::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
             TypeError::InfiniteType(t, m) => write!(f, "cannot construct infinite type {t} = {m}"),
             TypeError::ConstructorConflict(c1, c2) => write!(f, "expected type {c1}, found {c2}"),
         }

@@ -1,32 +1,37 @@
-use crate::{
-    expression::{Expression, Literal, Program},
-    lexer::Token,
-};
+use crate::expression::{Binding, Expression, Literal, Program};
+use crate::lexer::Token;
 use chumsky::prelude::*;
 
 pub fn parse(tokens: &[Token]) -> Result<Program, Vec<Simple<Token>>> {
     program_parser().parse(tokens)
 }
 
-fn program_parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
+fn binding_parser() -> impl Parser<Token, Binding, Error = Simple<Token>> + Copy {
+    select! {
+        Token::Ident(x) => Binding::Var(x),
+        Token::Discard => Binding::Discard,
+    }
+}
+
+fn program_parser() -> impl Parser<Token, Program, Error = Simple<Token>> + Clone {
     let def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
         .then(expr_parser());
 
     let def_parser = def_parser.or(select! {Token::Ident(f) => f}
-        .then(select! {Token::Ident(x) => x})
-        .then(select! {Token::Ident(x) => x}.repeated())
+        .then(binding_parser())
+        .then(binding_parser().repeated())
         .then_ignore(just(Token::Assign))
         .then(expr_parser())
-        .map(|(((f, x), xs), e)| {
-            let e = xs
+        .map(|(((f, b), bs), e)| {
+            let e = bs
                 .into_iter()
                 .rev()
-                .fold(e, |e, x| Expression::Abs(x, Box::new(e)));
-            let e = if f != x && e.free_vars().contains(&f) {
-                Expression::Fix(f.clone(), x, Box::new(e))
+                .fold(e, |e, b| Expression::Abs(b, Box::new(e)));
+            let e = if b != f.clone().into() && e.free_vars().contains(&f) {
+                Expression::Fix(f.clone(), b, Box::new(e))
             } else {
-                Expression::Abs(x, Box::new(e))
+                Expression::Abs(b, Box::new(e))
             };
             (f, e)
         }));
@@ -37,7 +42,7 @@ fn program_parser() -> impl Parser<Token, Program, Error = Simple<Token>> {
         .then_ignore(end())
 }
 
-fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
+fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clone {
     recursive(|expr| {
         let var_parser = select! {Token::Ident(s) => Expression::Var(s)};
 
@@ -48,42 +53,42 @@ fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
         };
 
         let abs_parser = just(Token::Lambda)
-            .ignore_then(select! {Token::Ident(x) => x}.repeated().at_least(1))
+            .ignore_then(binding_parser().repeated().at_least(1))
             .then_ignore(just(Token::Arrow))
             .then(expr.clone())
             .map(|(xs, e)| {
                 xs.into_iter()
                     .rev()
-                    .fold(e, |e, x| Expression::Abs(x, Box::new(e)))
+                    .fold(e, |e, b| Expression::Abs(b, Box::new(e)))
             });
 
         let let_parser = just(Token::Let)
-            .ignore_then(select! {Token::Ident(x) => x})
+            .ignore_then(binding_parser())
             .then_ignore(just(Token::Assign))
             .then(expr.clone())
             .then_ignore(just(Token::In))
             .then(expr.clone())
-            .map(|((x, e1), e2)| Expression::Let(x, Box::new(e1), Box::new(e2)));
+            .map(|((b, e1), e2)| Expression::Let(b, Box::new(e1), Box::new(e2)));
 
         let let_parser = let_parser.or(just(Token::Let)
             .ignore_then(select! {Token::Ident(f) => f})
-            .then(select! {Token::Ident(x) => x})
-            .then(select! {Token::Ident(x) => x}.repeated())
+            .then(binding_parser())
+            .then(binding_parser().repeated())
             .then_ignore(just(Token::Assign))
             .then(expr.clone())
             .then_ignore(just(Token::In))
             .then(expr.clone())
-            .map(|((((f, x), xs), e1), e2)| {
-                let e1 = xs
+            .map(|((((f, b), bs), e1), e2)| {
+                let e1 = bs
                     .into_iter()
                     .rev()
-                    .fold(e1, |e, x| Expression::Abs(x, Box::new(e)));
-                let e1 = if f != x && e1.free_vars().contains(&f) {
-                    Expression::Fix(f.clone(), x, Box::new(e1))
+                    .fold(e1, |e, b| Expression::Abs(b, Box::new(e)));
+                let e1 = if b != f.clone().into() && e1.free_vars().contains(&f) {
+                    Expression::Fix(f.clone(), b, Box::new(e1))
                 } else {
-                    Expression::Abs(x, Box::new(e1))
+                    Expression::Abs(b, Box::new(e1))
                 };
-                Expression::Let(f, Box::new(e1), Box::new(e2))
+                Expression::Let(f.into(), Box::new(e1), Box::new(e2))
             }));
 
         let paren_parser = expr.delimited_by(just(Token::LeftParen), just(Token::RightParen));
