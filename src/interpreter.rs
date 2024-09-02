@@ -15,6 +15,7 @@ type State = (Expression, Environment, Continuation);
 pub enum EvalError {
     UnknownVariable(String),
     InvalidState(State),
+    NoMain,
 }
 
 impl Display for Frame {
@@ -37,12 +38,26 @@ impl Display for EvalError {
                     k.first().map_or("None".to_owned(), |f| f.to_string())
                 )
             }
+            EvalError::NoMain => write!(f, "no 'main' definition found"),
         }
     }
 }
 
-pub fn eval(e: &Expression) -> Result<Expression, EvalError> {
-    let mut s = (e.clone(), Environment::new(), Vec::new());
+pub fn run(program: &[(String, Expression)]) -> Result<Expression, EvalError> {
+    let (_, expr_main) = program
+        .iter()
+        .find(|(name, _)| name == "main")
+        .ok_or(EvalError::NoMain)?;
+    let env = program
+        .iter()
+        .filter(|(name, _)| name != "main")
+        .cloned()
+        .collect();
+    eval(env, expr_main)
+}
+
+pub fn eval(env: Environment, e: &Expression) -> Result<Expression, EvalError> {
+    let mut s = (e.clone(), env, Vec::new());
     loop {
         let e1 = s.0.clone();
         s = eval1(s)?;

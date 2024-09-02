@@ -6,6 +6,7 @@ pub enum Token {
     Unit,
     Bool(bool),
     Int(u64),
+    Def,
     Lambda,
     Arrow,
     Let,
@@ -17,6 +18,7 @@ pub enum Token {
 
 pub fn lexer() -> impl Parser<char, Vec<Token>, Error = Simple<char>> {
     choice((
+        text::keyword("def").to(Token::Def),
         text::keyword("let").to(Token::Let),
         text::keyword("in").to(Token::In),
         text::keyword("true").to(Token::Bool(true)),

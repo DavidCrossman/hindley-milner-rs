@@ -1,5 +1,6 @@
 use crate::variable::FreeVariable;
-use std::{collections::HashMap, fmt::Display, iter, ops::Add};
+use std::ops::{Add, AddAssign};
+use std::{collections::HashMap, fmt::Display, iter};
 
 #[derive(Hash, Clone, PartialEq, Eq, Debug)]
 pub enum TypeVariable {
@@ -96,6 +97,42 @@ impl Display for TypeError {
     }
 }
 
+impl From<TypeVariable> for MonoType {
+    fn from(value: TypeVariable) -> Self {
+        Self::Var(value)
+    }
+}
+
+impl From<TypeConstructor> for MonoType {
+    fn from(value: TypeConstructor) -> Self {
+        Self::Con(value)
+    }
+}
+
+impl From<MonoType> for PolyType {
+    fn from(value: MonoType) -> Self {
+        Self {
+            quantifiers: Default::default(),
+            mono: value,
+        }
+    }
+}
+
+impl<P: Into<PolyType>> AddAssign<(String, P)> for Context {
+    fn add_assign(&mut self, (name, p): (String, P)) {
+        self.map.insert(name, p.into());
+    }
+}
+
+impl<P: Into<PolyType>> Add<(String, P)> for Context {
+    type Output = Self;
+
+    fn add(mut self, rhs: (String, P)) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
 impl Context {
     pub fn new() -> Self {
         Self { map: HashMap::new() }
@@ -164,35 +201,5 @@ impl PolyType {
             }
         });
         self.mono
-    }
-}
-
-impl From<TypeVariable> for MonoType {
-    fn from(value: TypeVariable) -> Self {
-        Self::Var(value)
-    }
-}
-
-impl From<TypeConstructor> for MonoType {
-    fn from(value: TypeConstructor) -> Self {
-        Self::Con(value)
-    }
-}
-
-impl From<MonoType> for PolyType {
-    fn from(value: MonoType) -> Self {
-        Self {
-            quantifiers: Default::default(),
-            mono: value,
-        }
-    }
-}
-
-impl<P: Into<PolyType>> Add<(String, P)> for Context {
-    type Output = Self;
-
-    fn add(mut self, (v, p): (String, P)) -> Self::Output {
-        self.env.insert(v, p.into());
-        self
     }
 }

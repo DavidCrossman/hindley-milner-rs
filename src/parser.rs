@@ -75,6 +75,12 @@ impl Display for Environment {
     }
 }
 
+impl FromIterator<(String, Expression)> for Environment {
+    fn from_iter<T: IntoIterator<Item = (String, Expression)>>(iter: T) -> Self {
+        Self(HashMap::from_iter(iter))
+    }
+}
+
 impl Expression {
     pub fn is_value(&self) -> bool {
         use Expression::*;
@@ -91,7 +97,35 @@ impl Environment {
     }
 }
 
-pub fn parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
+pub fn parser() -> impl Parser<Token, Vec<(String, Expression)>, Error = Simple<Token>> {
+    let def_parser = just(Token::Def)
+        .ignore_then(select! {Token::Ident(x) => x})
+        .then_ignore(just(Token::Assign))
+        .then(expr_parser());
+
+    let def_parser = def_parser.or(just(Token::Def)
+        .ignore_then(select! {Token::Ident(f) => f})
+        .then(select! {Token::Ident(x) => x})
+        .then(select! {Token::Ident(x) => x}.repeated())
+        .then_ignore(just(Token::Assign))
+        .then(expr_parser())
+        .map(|(((f, x), xs), e)| {
+            let e = xs
+                .into_iter()
+                .rev()
+                .fold(e, |e, x| Expression::Abs(x, Box::new(e)));
+            let e = if f != x && e.free_vars().contains(&f) {
+                Expression::Fix(f.clone(), x, Box::new(e))
+            } else {
+                Expression::Abs(x, Box::new(e))
+            };
+            (f, e)
+        }));
+
+    def_parser.repeated().then_ignore(end())
+}
+
+fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> {
     recursive(|expr| {
         let var_parser = select! {Token::Ident(s) => Expression::Var(s)};
 
