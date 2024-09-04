@@ -47,7 +47,8 @@ impl PolyType {
         &self.mono.free_vars() - &HashSet::from_iter(self.quantifiers.iter())
     }
 
-    pub fn instantiate(mut self, next_fresh: usize) -> MonoType {
+    pub fn instantiate(mut self, next_fresh: usize) -> (MonoType, usize) {
+        let n = next_fresh + self.quantifiers.len();
         let mappings = self
             .quantifiers
             .into_iter()
@@ -58,7 +59,7 @@ impl PolyType {
                 *t1 = t2.to_owned();
             }
         });
-        self.mono
+        (self.mono, n)
     }
 }
 

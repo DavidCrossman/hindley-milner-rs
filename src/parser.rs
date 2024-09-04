@@ -1,9 +1,16 @@
-use crate::expression::{Binding, Expression, Literal, Program};
+use crate::expression::{Binding, Expression, Literal};
 use crate::lexer::Token;
+use crate::type_checking::model::{MonoType, TypeConstructor};
 use chumsky::prelude::*;
 
-pub fn parse(tokens: &[Token]) -> Result<Program, Vec<Simple<Token>>> {
-    program_parser().parse(tokens)
+#[derive(Clone, Debug)]
+pub enum Item {
+    Definition(String, Expression),
+    Declaration(String, MonoType),
+}
+
+pub fn parse(tokens: &[Token]) -> Result<Vec<Item>, Vec<Simple<Token>>> {
+    items_parser().parse(tokens)
 }
 
 fn binding_parser() -> impl Parser<Token, Binding, Error = Simple<Token>> + Copy {
@@ -13,7 +20,7 @@ fn binding_parser() -> impl Parser<Token, Binding, Error = Simple<Token>> + Copy
     }
 }
 
-fn program_parser() -> impl Parser<Token, Program, Error = Simple<Token>> + Clone {
+fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
     let def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
         .then(expr_parser());
@@ -36,10 +43,40 @@ fn program_parser() -> impl Parser<Token, Program, Error = Simple<Token>> + Clon
             (f, e)
         }));
 
-    def_parser
+    let dec_parser = select! {Token::Ident(x) => x}
+        .then_ignore(just(Token::OfType))
+        .then(type_parser());
+
+    let item_parser = def_parser
+        .map(|(name, e)| Item::Definition(name, e))
+        .or(dec_parser.map(|(name, m)| Item::Declaration(name, m)));
+
+    item_parser
         .separated_by(just(Token::Separator))
         .padded_by(just(Token::Separator).repeated())
         .then_ignore(end())
+}
+
+fn type_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
+    recursive(|type_parser| {
+        let type_con_parser = select! {
+            Token::UnitType => MonoType::Con(TypeConstructor::Unit),
+            Token::BoolType => MonoType::Con(TypeConstructor::Bool),
+            Token::IntType => MonoType::Con(TypeConstructor::Int),
+        };
+
+        let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.into()) };
+
+        let paren_parser = type_parser
+            .clone()
+            .delimited_by(just(Token::LeftParen), just(Token::RightParen));
+
+        let atom = choice((type_con_parser, ident_parser, paren_parser));
+
+        (atom.clone().then_ignore(just(Token::Arrow)).repeated())
+            .then(atom)
+            .foldr(|a, b| MonoType::Con(TypeConstructor::Function(Box::new(a), Box::new(b))))
+    })
 }
 
 fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clone {

@@ -1,8 +1,5 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Display,
-    iter,
-};
+use std::collections::{HashMap, HashSet};
+use std::{fmt::Display, iter};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Literal {
@@ -29,7 +26,9 @@ pub enum Expression {
 }
 
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
-pub struct Environment(pub HashMap<String, Expression>);
+pub struct Environment {
+    pub map: HashMap<String, Expression>,
+}
 
 pub type Program = Vec<(String, Expression)>;
 
@@ -85,7 +84,7 @@ impl Display for Environment {
         write!(
             f,
             "[{}]",
-            self.0
+            self.map
                 .iter()
                 .map(|(k, v)| format!("{k}={v}"))
                 .collect::<Vec<_>>()
@@ -102,7 +101,9 @@ impl From<String> for Binding {
 
 impl FromIterator<(String, Expression)> for Environment {
     fn from_iter<T: IntoIterator<Item = (String, Expression)>>(iter: T) -> Self {
-        Self(HashMap::from_iter(iter))
+        Self {
+            map: HashMap::from_iter(iter),
+        }
     }
 }
 
@@ -128,8 +129,10 @@ impl Expression {
                 .copied()
                 .collect(),
             Let(Binding::Discard, e1, e2) => e2.free_vars().union(&e1.free_vars()).copied().collect(),
-            Closure(Binding::Var(x), e, env) => &e.free_vars() - &env.0.keys().chain(iter::once(x)).collect(),
-            Closure(Binding::Discard, e, env) => &e.free_vars() - &env.0.keys().collect(),
+            Closure(Binding::Var(x), e, env) => {
+                &e.free_vars() - &env.map.keys().chain(iter::once(x)).collect()
+            }
+            Closure(Binding::Discard, e, env) => &e.free_vars() - &env.map.keys().collect(),
             Fix(f, Binding::Var(x), e) => &e.free_vars() - &[f, x].into(),
             Fix(f, Binding::Discard, e) => &e.free_vars() - &[f].into(),
         }
@@ -138,6 +141,6 @@ impl Expression {
 
 impl Environment {
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self { map: HashMap::new() }
     }
 }

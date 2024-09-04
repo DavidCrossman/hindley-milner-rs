@@ -7,8 +7,12 @@ pub enum Token {
     Lambda,
     Arrow,
     Assign,
+    OfType,
     LeftParen,
     RightParen,
+    UnitType,
+    BoolType,
+    IntType,
     Unit,
     Bool(bool),
     Int(u64),
@@ -29,10 +33,12 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
         PaddedToken::Tok(t) => tokens.push(t),
         PaddedToken::Newline => {
             use Token::*;
-            if tokens
-                .last()
-                .is_some_and(|t| matches!(t, Ident(_) | Unit | Int(_) | Bool(_) | RightParen))
-            {
+            if tokens.last().is_some_and(|t| {
+                matches!(
+                    t,
+                    UnitType | BoolType | IntType | Ident(_) | Unit | Int(_) | Bool(_) | RightParen
+                )
+            }) {
                 tokens.push(Token::Separator);
             }
         }
@@ -48,12 +54,16 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
     let token_lexer = choice((
         text::keyword("let").to(Token::Let),
         text::keyword("in").to(Token::In),
+        text::keyword("Unit").to(Token::UnitType),
+        text::keyword("Bool").to(Token::BoolType),
+        text::keyword("Int").to(Token::IntType),
         text::keyword("true").to(Token::Bool(true)),
         text::keyword("false").to(Token::Bool(false)),
         just("()").to(Token::Unit),
         one_of("λ\\").to(Token::Lambda),
         just("->").or(just("→")).to(Token::Arrow),
         just('=').to(Token::Assign),
+        just(':').to(Token::OfType),
         just('(').to(Token::LeftParen),
         just(')').to(Token::RightParen),
         just(';').to(Token::Separator),

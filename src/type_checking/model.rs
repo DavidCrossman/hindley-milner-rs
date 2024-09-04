@@ -96,6 +96,18 @@ impl Display for TypeError {
     }
 }
 
+impl From<String> for TypeVariable {
+    fn from(value: String) -> Self {
+        Self::UserDefined(value)
+    }
+}
+
+impl From<usize> for TypeVariable {
+    fn from(value: usize) -> Self {
+        Self::Inferred(value)
+    }
+}
+
 impl From<TypeVariable> for MonoType {
     fn from(value: TypeVariable) -> Self {
         Self::Var(value)
@@ -114,6 +126,12 @@ impl From<MonoType> for PolyType {
             quantifiers: Default::default(),
             mono: value,
         }
+    }
+}
+
+impl Extend<(String, PolyType)> for Context {
+    fn extend<T: IntoIterator<Item = (String, PolyType)>>(&mut self, iter: T) {
+        self.map.extend(iter)
     }
 }
 

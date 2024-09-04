@@ -17,17 +17,16 @@ pub fn w(
             n,
         )),
         Expression::Var(x) => match context.map.get(x) {
-            Some(p) => Ok((
-                Substitution::new(),
-                p.clone().instantiate(n),
-                n + p.quantifiers.len(),
-            )),
+            Some(p) => {
+                let (m, n) = p.clone().instantiate(n);
+                Ok((Substitution::new(), m, n))
+            }
             None => Err(TypeError::UnknownVariable(x.clone())),
         },
         Expression::App(e1, e2) => {
             let (s1, m1, n) = w(context, e1, n)?;
             let (s2, m2, n) = w(&context.clone().substitute(&s1), e2, n)?;
-            let beta = MonoType::Var(TypeVariable::Inferred(n));
+            let beta = MonoType::Var(n.into());
             let s3 = unify(
                 TypeConstructor::Function(Box::new(m2), Box::new(beta.clone())).into(),
                 m1.substitute(&s2),
@@ -35,7 +34,7 @@ pub fn w(
             Ok((s1.combine(&s2.combine(&s3)), beta.substitute(&s3), n + 1))
         }
         Expression::Abs(b, e) | Expression::Closure(b, e, _) => {
-            let beta = MonoType::Var(TypeVariable::Inferred(n));
+            let beta = MonoType::Var(n.into());
             let context = match b {
                 Binding::Var(x) => &(context.clone() + (x.clone(), beta.clone())),
                 Binding::Discard => context,
@@ -54,7 +53,7 @@ pub fn w(
             Ok((s1.combine(&s2), m2, n))
         }
         Expression::Fix(f, b, e) => {
-            let beta = MonoType::Var(TypeVariable::Inferred(n));
+            let beta = MonoType::Var(n.into());
             let context = context.clone() + (f.clone(), beta.clone());
             let (s1, m1, n) = w(&context, &Expression::Abs(b.clone(), e.clone()), n + 1)?;
             let s2 = unify(beta.substitute(&s1), m1.clone())?;
@@ -80,19 +79,22 @@ pub fn m(
         )
         .map(|s| (s, n)),
         Expression::Var(x) => match context.map.get(x) {
-            Some(p) => unify(t, p.clone().instantiate(n)).map(|s| (s, n + p.quantifiers.len())),
+            Some(p) => {
+                let (t2, n) = p.clone().instantiate(n);
+                unify(t, t2).map(|s| (s, n))
+            }
             None => Err(TypeError::UnknownVariable(x.clone())),
         },
         Expression::App(e1, e2) => {
-            let beta = MonoType::Var(TypeVariable::Inferred(n));
+            let beta = MonoType::Var(n.into());
             let t = TypeConstructor::Function(Box::new(beta.clone()), Box::new(t));
             let (s1, n) = m(context, e1, t.into(), n + 1)?;
             let (s2, n) = m(&context.clone().substitute(&s1), e2, beta.substitute(&s1), n)?;
             Ok((s1.combine(&s2), n))
         }
         Expression::Abs(b, e) | Expression::Closure(b, e, _) => {
-            let beta1 = MonoType::Var(TypeVariable::Inferred(n));
-            let beta2 = MonoType::Var(TypeVariable::Inferred(n + 1));
+            let beta1 = MonoType::Var(n.into());
+            let beta2 = MonoType::Var((n + 1).into());
             let t2 = TypeConstructor::Function(Box::new(beta1.clone()), Box::new(beta2.clone())).into();
             let s1 = unify(t, t2)?;
             let mut context = context.clone().substitute(&s1);
@@ -103,7 +105,7 @@ pub fn m(
             Ok((s1.combine(&s2), n))
         }
         Expression::Let(b, e1, e2) => {
-            let beta = MonoType::Var(TypeVariable::Inferred(n));
+            let beta = MonoType::Var(n.into());
             let (s1, n) = m(context, e1, beta.clone(), n + 1)?;
             let mut context = context.clone().substitute(&s1);
             if let Binding::Var(x) = b {
