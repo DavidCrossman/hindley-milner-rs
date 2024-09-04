@@ -1,6 +1,6 @@
 use crate::expression::{Binding, Expression, Literal};
-use crate::lexer::Token;
 use crate::type_checking::model::{MonoType, TypeConstructor};
+use crate::{free_variable::FreeVariable, lexer::Token};
 use chumsky::prelude::*;
 
 #[derive(Clone, Debug)]

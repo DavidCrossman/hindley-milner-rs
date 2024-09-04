@@ -1,15 +1,16 @@
-use crate::expression::{Binding, Environment, Expression, Program};
+use crate::environment::Environment;
+use crate::expression::{Binding, Expression, Program};
 use std::fmt::Display;
 
 #[derive(Clone, Debug)]
 pub enum Frame {
-    HApp(Expression, Environment),
+    HApp(Expression, Environment<Expression>),
     AppH(Expression),
 }
 
 type Continuation = Vec<Frame>;
 
-type State = (Expression, Environment, Continuation);
+type State = (Expression, Environment<Expression>, Continuation);
 
 #[derive(Clone, Debug)]
 pub enum EvalError {
@@ -56,7 +57,7 @@ pub fn run(program: &Program) -> Result<Expression, EvalError> {
     eval(&env, expr_main)
 }
 
-pub fn eval(env: &Environment, e: &Expression) -> Result<Expression, EvalError> {
+pub fn eval(env: &Environment<Expression>, e: &Expression) -> Result<Expression, EvalError> {
     let mut s = (e.clone(), Environment::new(), Vec::new());
     loop {
         let e1 = s.0.clone();
@@ -68,13 +69,12 @@ pub fn eval(env: &Environment, e: &Expression) -> Result<Expression, EvalError> 
     }
 }
 
-fn eval1(s: State, global: &Environment) -> Result<State, EvalError> {
+fn eval1(s: State, global: &Environment<Expression>) -> Result<State, EvalError> {
     use Expression::*;
     match s {
         (Var(x), mut env, k) => match env
-            .map
             .remove(&x)
-            .or(global.map.get(&x).cloned())
+            .or(global.get(&x).cloned())
             .ok_or(EvalError::UnknownVariable(x))?
         {
             Closure(x, e, env) => Ok((Abs(x, e), env, k)),
@@ -82,7 +82,7 @@ fn eval1(s: State, global: &Environment) -> Result<State, EvalError> {
         },
         (Abs(x, e), env, k) => Ok((Closure(x, e, env), Environment::new(), k)),
         (Fix(f, x, e), mut env, k) => {
-            env.map.insert(f.clone(), Fix(f, x.clone(), e.clone()));
+            env += (f.clone(), Fix(f, x.clone(), e.clone()));
             Ok((Closure(x, e, env), Environment::new(), k))
         }
         (App(e1, e2), env, mut k) => {
@@ -97,7 +97,7 @@ fn eval1(s: State, global: &Environment) -> Result<State, EvalError> {
             }
             Some(Frame::AppH(Closure(b, e, mut env))) => {
                 if let Binding::Var(x) = b {
-                    env.map.insert(x, v);
+                    env += (x, v);
                 }
                 Ok((*e, env, k))
             }

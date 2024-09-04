@@ -1,5 +1,5 @@
-use std::ops::{Add, AddAssign};
-use std::{collections::HashMap, fmt::Display};
+use crate::{environment::Environment, free_variable::FreeVariable};
+use std::{collections::HashMap, fmt::Display, iter};
 
 #[derive(Hash, Clone, PartialEq, Eq, Debug)]
 pub enum TypeVariable {
@@ -26,11 +26,6 @@ pub enum MonoType {
 pub struct PolyType {
     pub quantifiers: Vec<TypeVariable>,
     pub mono: MonoType,
-}
-
-#[derive(Default, PartialEq, Eq, Clone, Debug)]
-pub struct Context {
-    pub map: HashMap<String, PolyType>,
 }
 
 #[derive(Clone, Debug)]
@@ -129,33 +124,6 @@ impl From<MonoType> for PolyType {
     }
 }
 
-impl Extend<(String, PolyType)> for Context {
-    fn extend<T: IntoIterator<Item = (String, PolyType)>>(&mut self, iter: T) {
-        self.map.extend(iter)
-    }
-}
-
-impl<P: Into<PolyType>> AddAssign<(String, P)> for Context {
-    fn add_assign(&mut self, (name, p): (String, P)) {
-        self.map.insert(name, p.into());
-    }
-}
-
-impl<P: Into<PolyType>> Add<(String, P)> for Context {
-    type Output = Self;
-
-    fn add(mut self, rhs: (String, P)) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl Context {
-    pub fn new() -> Self {
-        Self { map: HashMap::new() }
-    }
-}
-
 impl MonoType {
     pub fn traverse(&mut self, f: &mut impl FnMut(&mut MonoType)) {
         use TypeConstructor::*;
@@ -168,5 +136,56 @@ impl MonoType {
                 r.traverse(f);
             }
         }
+    }
+
+    pub fn vars(&self) -> impl Iterator<Item = &TypeVariable> {
+        use TypeConstructor::*;
+        let iter: Box<dyn Iterator<Item = _>> = match self {
+            MonoType::Var(t) => Box::new(iter::once(t)),
+            MonoType::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            MonoType::Con(List(m)) => m.vars(),
+            MonoType::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
+        };
+        iter
+    }
+
+    pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut TypeVariable> {
+        use TypeConstructor::*;
+        let iter: Box<dyn Iterator<Item = _>> = match self {
+            MonoType::Var(t) => Box::new(iter::once(t)),
+            MonoType::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            MonoType::Con(List(m)) => m.vars_mut(),
+            MonoType::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
+        };
+        iter
+    }
+
+    pub fn generalise(self, env: &Environment<PolyType>) -> PolyType {
+        PolyType {
+            quantifiers: self
+                .free_vars()
+                .difference(&env.free_vars())
+                .copied()
+                .cloned()
+                .collect(),
+            mono: self,
+        }
+    }
+}
+
+impl PolyType {
+    pub fn instantiate(mut self, next_fresh: usize) -> (MonoType, usize) {
+        let n = next_fresh + self.quantifiers.len();
+        let mappings = self
+            .quantifiers
+            .into_iter()
+            .zip((next_fresh..).map(TypeVariable::Inferred))
+            .collect::<HashMap<_, _>>();
+        self.mono.vars_mut().for_each(|t1| {
+            if let Some(t2) = mappings.get(t1) {
+                *t1 = t2.to_owned();
+            }
+        });
+        (self.mono, n)
     }
 }

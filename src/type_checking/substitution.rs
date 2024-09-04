@@ -1,5 +1,6 @@
-use super::model::{Context, MonoType, PolyType, TypeVariable};
-use std::collections::hash_map::{self, HashMap};
+use super::model::{MonoType, PolyType, TypeVariable};
+use crate::environment::Environment;
+use std::collections::{hash_map, HashMap};
 use std::fmt::Display;
 
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
@@ -7,12 +8,15 @@ pub struct Substitution {
     map: HashMap<TypeVariable, MonoType>,
 }
 
-impl<'a> IntoIterator for &'a Substitution {
-    type Item = (&'a TypeVariable, &'a MonoType);
-    type IntoIter = hash_map::Iter<'a, TypeVariable, MonoType>;
+pub trait Substitute {
+    fn substitute_mut(&mut self, subst: &Substitution);
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.map.iter()
+    fn substitute(mut self, subst: &Substitution) -> Self
+    where
+        Self: Sized,
+    {
+        self.substitute_mut(subst);
+        self
     }
 }
 
@@ -38,7 +42,7 @@ impl Display for Substitution {
         write!(
             f,
             "{{{}}}",
-            self.into_iter()
+            self.iter()
                 .map(|(x, m)| format!("{x} -> {m}"))
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -51,6 +55,10 @@ impl Substitution {
         Self { map: HashMap::new() }
     }
 
+    pub fn iter(&self) -> hash_map::Iter<'_, TypeVariable, MonoType> {
+        self.map.iter()
+    }
+
     pub fn combine_mut(&mut self, other: &Self) {
         self.map.values_mut().for_each(|m| m.substitute_mut(other));
         self.map.extend(other.to_owned());
@@ -58,18 +66,6 @@ impl Substitution {
 
     pub fn combine(mut self, other: &Self) -> Self {
         self.combine_mut(other);
-        self
-    }
-}
-
-pub trait Substitute {
-    fn substitute_mut(&mut self, subst: &Substitution);
-
-    fn substitute(mut self, subst: &Substitution) -> Self
-    where
-        Self: Sized,
-    {
-        self.substitute_mut(subst);
         self
     }
 }
@@ -94,8 +90,8 @@ impl Substitute for PolyType {
     }
 }
 
-impl Substitute for Context {
+impl<S: Substitute> Substitute for Environment<S> {
     fn substitute_mut(&mut self, subst: &Substitution) {
-        self.map.values_mut().for_each(|m| m.substitute_mut(subst));
+        self.values_mut().for_each(|x| x.substitute_mut(subst));
     }
 }

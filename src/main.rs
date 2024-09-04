@@ -1,11 +1,13 @@
+pub mod environment;
 pub mod expression;
+pub mod free_variable;
 pub mod interpreter;
 pub mod lexer;
 pub mod parser;
 pub mod type_checking;
 
+use environment::Environment;
 use parser::Item;
-use type_checking::model::Context;
 
 fn main() {
     let source = r"
@@ -21,12 +23,12 @@ fn main() {
         Ok(tokens) => match parser::parse(&tokens) {
             Ok(items) => {
                 let mut program = Vec::new();
-                let mut context = Context::new();
+                let mut env = Environment::new();
                 items.into_iter().for_each(|item| match item {
                     Item::Definition(name, expr) => program.push((name, expr)),
-                    Item::Declaration(name, m) => context += (name, m.generalise(&context)),
+                    Item::Declaration(name, m) => env += (name, m.generalise(&env)),
                 });
-                match type_checking::type_check(&program, context) {
+                match type_checking::type_check(&program, env) {
                     Ok(_) => match interpreter::run(&program) {
                         Ok(e) => println!("{e}"),
                         Err(e) => println!("runtime error: {e}"),

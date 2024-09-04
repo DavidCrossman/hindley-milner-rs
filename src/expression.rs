@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
-use std::{fmt::Display, iter};
+use crate::environment::Environment;
+use std::fmt::Display;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Literal {
@@ -21,13 +21,8 @@ pub enum Expression {
     App(Box<Expression>, Box<Expression>),
     Abs(Binding, Box<Expression>),
     Let(Binding, Box<Expression>, Box<Expression>),
-    Closure(Binding, Box<Expression>, Environment),
+    Closure(Binding, Box<Expression>, Environment<Expression>),
     Fix(String, Binding, Box<Expression>),
-}
-
-#[derive(Default, PartialEq, Eq, Clone, Debug)]
-pub struct Environment {
-    pub map: HashMap<String, Expression>,
 }
 
 pub type Program = Vec<(String, Expression)>;
@@ -79,13 +74,12 @@ impl Display for Expression {
     }
 }
 
-impl Display for Environment {
+impl Display for Environment<Expression> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "[{}]",
-            self.map
-                .iter()
+            self.iter()
                 .map(|(k, v)| format!("{k}={v}"))
                 .collect::<Vec<_>>()
                 .join(",")
@@ -99,14 +93,6 @@ impl From<String> for Binding {
     }
 }
 
-impl FromIterator<(String, Expression)> for Environment {
-    fn from_iter<T: IntoIterator<Item = (String, Expression)>>(iter: T) -> Self {
-        Self {
-            map: HashMap::from_iter(iter),
-        }
-    }
-}
-
 impl Expression {
     pub fn is_value(&self) -> bool {
         use Expression::*;
@@ -114,33 +100,5 @@ impl Expression {
             Lit(_) | Closure(..) => true,
             Var(_) | App(..) | Abs(..) | Let(..) | Fix(..) => false,
         }
-    }
-
-    pub fn free_vars(&self) -> HashSet<&String> {
-        use Expression::*;
-        match self {
-            Lit(_) => HashSet::new(),
-            Var(v) => [v].into(),
-            App(e1, e2) => e1.free_vars().union(&e2.free_vars()).copied().collect(),
-            Abs(Binding::Var(x), e) => &e.free_vars() - &[x].into(),
-            Abs(Binding::Discard, e) => e.free_vars(),
-            Let(Binding::Var(x), e1, e2) => (&e2.free_vars() - &[x].into())
-                .union(&e1.free_vars())
-                .copied()
-                .collect(),
-            Let(Binding::Discard, e1, e2) => e2.free_vars().union(&e1.free_vars()).copied().collect(),
-            Closure(Binding::Var(x), e, env) => {
-                &e.free_vars() - &env.map.keys().chain(iter::once(x)).collect()
-            }
-            Closure(Binding::Discard, e, env) => &e.free_vars() - &env.map.keys().collect(),
-            Fix(f, Binding::Var(x), e) => &e.free_vars() - &[f, x].into(),
-            Fix(f, Binding::Discard, e) => &e.free_vars() - &[f].into(),
-        }
-    }
-}
-
-impl Environment {
-    pub fn new() -> Self {
-        Self { map: HashMap::new() }
     }
 }
