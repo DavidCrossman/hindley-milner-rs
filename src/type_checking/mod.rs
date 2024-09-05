@@ -3,14 +3,13 @@ pub mod model;
 pub mod substitution;
 pub mod unification;
 
+pub type Result<T> = std::result::Result<T, model::TypeError>;
+
 use crate::{environment::Environment, expression::Program};
-use model::{MonoType, PolyType, TypeError};
+use model::{MonoType, PolyType};
 use substitution::Substitute;
 
-pub fn type_check(
-    program: &Program,
-    mut env: Environment<PolyType>,
-) -> Result<Environment<PolyType>, TypeError> {
+pub fn type_check(program: &Program, mut env: Environment<PolyType>) -> Result<Environment<PolyType>> {
     for (name, expr) in program {
         let (t, n) = match env.remove(name) {
             Some(p) => p.instantiate(0),

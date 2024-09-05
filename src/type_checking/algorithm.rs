@@ -1,4 +1,4 @@
-use super::{model::*, substitution::*, unification::unify};
+use super::{model::*, substitution::*, unification::unify, Result};
 use crate::environment::Environment;
 use crate::expression::{Binding, Expression, Literal};
 
@@ -6,7 +6,7 @@ pub fn w(
     env: &Environment<PolyType>,
     expr: &Expression,
     n: usize,
-) -> Result<(Substitution, MonoType, usize), TypeError> {
+) -> Result<(Substitution, MonoType, usize)> {
     match expr {
         Expression::Lit(lit) => Ok((
             Substitution::new(),
@@ -68,7 +68,7 @@ pub fn m(
     expr: &Expression,
     t: MonoType,
     n: usize,
-) -> Result<(Substitution, usize), TypeError> {
+) -> Result<(Substitution, usize)> {
     match expr {
         Expression::Lit(lit) => unify(
             t,
