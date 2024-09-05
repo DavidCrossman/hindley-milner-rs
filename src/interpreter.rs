@@ -1,21 +1,23 @@
 use crate::environment::Environment;
 use crate::expression::{Binding, Expression, Literal, Program};
 use std::fmt::Display;
+use std::rc::Rc;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone)]
 pub enum Value {
     Lit(Literal),
     Closure(Binding, Expression, Environment<Value>),
     FixClosure(String, Binding, Expression, Environment<Value>),
+    BuiltIn(BuiltInFn),
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone)]
 pub enum Control {
     Val(Value),
     Expr(Expression),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Frame {
     HApp(Expression, Environment<Value>),
     AppH(Value),
@@ -25,12 +27,16 @@ type Continuation = Vec<Frame>;
 
 type State = (Control, Environment<Value>, Continuation);
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum EvalError {
+    NoMain,
     UnknownVariable(String),
     InvalidState(State),
-    NoMain,
 }
+
+pub type Result<T> = std::result::Result<T, EvalError>;
+
+pub type BuiltInFn = Rc<dyn Fn(Value) -> Result<Value>>;
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -38,6 +44,7 @@ impl Display for Value {
             Value::Lit(lit) => lit.fmt(f),
             Value::Closure(b, e, env) => write!(f, "λ{env} {b} → {e}"),
             Value::FixClosure(x, b, e, env) => write!(f, "fix {x} λ{env} {b} → {e}"),
+            Value::BuiltIn(_) => "λ ? → ?".fmt(f),
         }
     }
 }
@@ -63,6 +70,7 @@ impl Display for Frame {
 impl Display for EvalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            EvalError::NoMain => write!(f, "no 'main' definition found"),
             EvalError::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
             EvalError::InvalidState((e, env, k)) => {
                 write!(
@@ -71,46 +79,50 @@ impl Display for EvalError {
                     k.first().map_or("None".to_owned(), |f| f.to_string())
                 )
             }
-            EvalError::NoMain => write!(f, "no 'main' definition found"),
         }
     }
 }
 
-pub fn run(program: &Program) -> Result<Value, EvalError> {
+pub fn run(program: &Program, built_ins: &Environment<BuiltInFn>) -> Result<Value> {
     let (_, expr_main) = program
         .iter()
         .find(|(name, _)| name == "main")
         .ok_or(EvalError::NoMain)?;
-    let env = program
+    let global = program
         .iter()
         .filter(|(name, _)| name != "main")
         .cloned()
         .collect();
-    eval(&env, expr_main)
+    eval(expr_main, &global, built_ins)
 }
 
-pub fn eval(env: &Environment<Expression>, e: &Expression) -> Result<Value, EvalError> {
-    let mut s = (Control::Expr(e.clone()), Environment::new(), Vec::new());
+pub fn eval(
+    expr: &Expression,
+    global: &Environment<Expression>,
+    built_ins: &Environment<BuiltInFn>,
+) -> Result<Value> {
+    let mut s = (Control::Expr(expr.clone()), Environment::new(), Vec::new());
     loop {
-        let c1 = s.0.clone();
-        s = eval1(s, env)?;
-        let (c2, _, k) = &s;
-        if let Control::Val(v) = &c1 {
-            if &c1 == c2 && k.is_empty() {
-                break Ok(v.clone());
-            }
+        s = match eval1(s, global, built_ins)? {
+            (Control::Val(v), _, k) if k.is_empty() => break Ok(v),
+            s => s,
         }
     }
 }
 
-fn eval1((c, mut env, mut k): State, global: &Environment<Expression>) -> Result<State, EvalError> {
+fn eval1(
+    (c, mut env, mut k): State,
+    global: &Environment<Expression>,
+    built_ins: &Environment<BuiltInFn>,
+) -> Result<State> {
     use Control::{Expr, Val};
     use Expression::{Abs, App, Fix, Let, Lit as ExprLit, Var};
-    use Value::{Closure, FixClosure, Lit as ValLit};
+    use Value::{BuiltIn, Closure, FixClosure, Lit as ValLit};
     match c {
         Expr(ExprLit(lit)) => Ok((Val(ValLit(lit)), env, k)),
         Expr(Var(x)) => (env.remove(&x).map(Val))
-            .or(global.get(&x).cloned().map(Expr))
+            .or_else(|| global.get(&x).cloned().map(Expr))
+            .or_else(|| built_ins.get(&x).cloned().map(BuiltIn).map(Val))
             .ok_or(EvalError::UnknownVariable(x))
             .map(|c| (c, env, k)),
         Expr(Abs(b, e)) => Ok((Val(Closure(b, *e, env)), Environment::new(), k)),
@@ -138,6 +150,7 @@ fn eval1((c, mut env, mut k): State, global: &Environment<Expression>) -> Result
                 env += (f.clone(), FixClosure(f, b, e.clone(), env.clone()));
                 Ok((Expr(e), env, k))
             }
+            Some(Frame::AppH(BuiltIn(fun))) => Ok((Val(fun(v)?), env, k)),
             Some(f @ Frame::AppH(_)) => {
                 k.push(f);
                 Err(EvalError::InvalidState((Val(v), env, k)))

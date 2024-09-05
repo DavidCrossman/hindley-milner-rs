@@ -4,7 +4,7 @@ use std::fmt::Display;
 pub enum Literal {
     Unit,
     Bool(bool),
-    Nat(u64),
+    Int(i64),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -30,7 +30,7 @@ impl Display for Literal {
         match self {
             Literal::Unit => "()".fmt(f),
             Literal::Bool(b) => b.fmt(f),
-            Literal::Nat(n) => n.fmt(f),
+            Literal::Int(n) => n.fmt(f),
         }
     }
 }

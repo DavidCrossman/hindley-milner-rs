@@ -2,11 +2,23 @@ use crate::expression::{Binding, Expression, Literal};
 use crate::type_checking::model::{MonoType, TypeConstructor};
 use crate::{free_variable::FreeVariable, lexer::Token};
 use chumsky::prelude::*;
+use std::fmt::Display;
 
 #[derive(Clone, Debug)]
 pub enum Item {
     Definition(String, Expression),
+    BuiltInDefinition(String),
     Declaration(String, MonoType),
+}
+
+impl Display for Item {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Item::Definition(s, e) => write!(f, "{s} = {e}"),
+            Item::BuiltInDefinition(s) => write!(f, "{s} = builtin"),
+            Item::Declaration(s, p) => write!(f, "{s} : {p}"),
+        }
+    }
 }
 
 pub fn parse(tokens: &[Token]) -> Result<Vec<Item>, Vec<Simple<Token>>> {
@@ -43,12 +55,17 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
             (f, e)
         }));
 
+    let builtin_def_parser = select! {Token::Ident(x) => x}
+        .then_ignore(just(Token::Assign))
+        .then_ignore(just(Token::BuiltIn));
+
     let dec_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::OfType))
         .then(type_parser());
 
     let item_parser = def_parser
         .map(|(name, e)| Item::Definition(name, e))
+        .or(builtin_def_parser.map(Item::BuiltInDefinition))
         .or(dec_parser.map(|(name, m)| Item::Declaration(name, m)));
 
     item_parser
@@ -86,7 +103,7 @@ fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clon
         let literal_parser = select! {
             Token::Unit => Expression::Lit(Literal::Unit),
             Token::Bool(b) => Expression::Lit(Literal::Bool(b)),
-            Token::Int(n) => Expression::Lit(Literal::Nat(n)),
+            Token::Int(n) => Expression::Lit(Literal::Int(n)),
         };
 
         let abs_parser = just(Token::Lambda)

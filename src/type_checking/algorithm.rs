@@ -13,7 +13,7 @@ pub fn w(
             MonoType::Con(match lit {
                 Literal::Unit => TypeConstructor::Unit,
                 Literal::Bool(_) => TypeConstructor::Bool,
-                Literal::Nat(_) => TypeConstructor::Int,
+                Literal::Int(_) => TypeConstructor::Int,
             }),
             n,
         )),
@@ -75,7 +75,7 @@ pub fn m(
             MonoType::Con(match lit {
                 Literal::Unit => TypeConstructor::Unit,
                 Literal::Bool(_) => TypeConstructor::Bool,
-                Literal::Nat(_) => TypeConstructor::Int,
+                Literal::Int(_) => TypeConstructor::Int,
             }),
         )
         .map(|s| (s, n)),

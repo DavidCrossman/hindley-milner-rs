@@ -10,12 +10,13 @@ pub enum Token {
     OfType,
     LeftParen,
     RightParen,
+    BuiltIn,
     UnitType,
     BoolType,
     IntType,
     Unit,
     Bool(bool),
-    Int(u64),
+    Int(i64),
     Ident(String),
     Discard,
     Separator,
@@ -36,7 +37,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
             if tokens.last().is_some_and(|t| {
                 matches!(
                     t,
-                    UnitType | BoolType | IntType | Ident(_) | Unit | Int(_) | Bool(_) | RightParen
+                    BuiltIn | UnitType | BoolType | IntType | Ident(_) | Unit | Int(_) | Bool(_) | RightParen
                 )
             }) {
                 tokens.push(Token::Separator);
@@ -54,6 +55,7 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
     let token_lexer = choice((
         text::keyword("let").to(Token::Let),
         text::keyword("in").to(Token::In),
+        text::keyword("builtin").to(Token::BuiltIn),
         text::keyword("Unit").to(Token::UnitType),
         text::keyword("Bool").to(Token::BoolType),
         text::keyword("Int").to(Token::IntType),
