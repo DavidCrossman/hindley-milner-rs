@@ -34,7 +34,7 @@ pub fn w(
             )?;
             Ok((s1.combine(&s2.combine(&s3)), beta.substitute(&s3), n + 1))
         }
-        Expression::Abs(b, e) | Expression::Closure(b, e, _) => {
+        Expression::Abs(b, e) => {
             let beta = MonoType::Var(n.into());
             let env = match b {
                 Binding::Var(x) => &(env.clone() + (x.clone(), beta.clone())),
@@ -93,7 +93,7 @@ pub fn m(
             let (s2, n) = m(&env.clone().substitute(&s1), e2, beta.substitute(&s1), n)?;
             Ok((s1.combine(&s2), n))
         }
-        Expression::Abs(b, e) | Expression::Closure(b, e, _) => {
+        Expression::Abs(b, e) => {
             let beta1 = MonoType::Var(n.into());
             let beta2 = MonoType::Var((n + 1).into());
             let t2 = TypeConstructor::Function(Box::new(beta1.clone()), Box::new(beta2.clone())).into();

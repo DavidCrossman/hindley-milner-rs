@@ -1,4 +1,5 @@
 use std::collections::{hash_map, HashMap};
+use std::fmt::Display;
 use std::ops::{Add, AddAssign};
 
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
@@ -41,6 +42,19 @@ impl<T, U: Into<T>> Add<(String, U)> for Environment<T> {
     fn add(mut self, rhs: (String, U)) -> Self::Output {
         self += rhs;
         self
+    }
+}
+
+impl<T: Display> Display for Environment<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "[{}]",
+            self.iter()
+                .map(|(n, x)| format!("{n}={x}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        )
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::environment::Environment;
 use crate::expression::{Binding, Expression};
 use crate::type_checking::model::{MonoType, PolyType, TypeVariable};
-use std::{collections::HashSet, iter};
+use std::collections::HashSet;
 
 pub trait FreeVariable<V> {
     fn free_vars(&self) -> HashSet<&V>;
@@ -33,8 +33,6 @@ impl FreeVariable<String> for Expression {
                 .copied()
                 .collect(),
             Let(Binding::Discard, e1, e2) => e2.free_vars().union(&e1.free_vars()).copied().collect(),
-            Closure(Binding::Var(x), e, env) => &e.free_vars() - &env.names().chain(iter::once(x)).collect(),
-            Closure(Binding::Discard, e, env) => &e.free_vars() - &env.names().collect(),
             Fix(f, Binding::Var(x), e) => &e.free_vars() - &[f, x].into(),
             Fix(f, Binding::Discard, e) => &e.free_vars() - &[f].into(),
         }
