@@ -1,9 +1,9 @@
+use crate::built_in::BuiltInFn;
 use crate::environment::Environment;
 use crate::expression::{Binding, Expression, Literal};
 use std::fmt::Display;
-use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Lit(Literal),
     Closure(Binding, Expression, Environment<Value>),
@@ -34,25 +34,6 @@ pub enum EvalError {
 }
 
 pub type Result<T> = std::result::Result<T, EvalError>;
-
-pub type BuiltInFn = Arc<dyn Fn(Value) -> Result<Value> + Send + Sync>;
-
-impl std::fmt::Debug for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Lit(lit) => f.debug_tuple("Lit").field(lit).finish(),
-            Self::Closure(b, e, env) => f.debug_tuple("Closure").field(b).field(e).field(env).finish(),
-            Self::FixClosure(x, b, e, env) => f
-                .debug_tuple("FixClosure")
-                .field(x)
-                .field(b)
-                .field(e)
-                .field(env)
-                .finish(),
-            Self::BuiltIn(_) => f.debug_tuple("BuiltIn").finish(),
-        }
-    }
-}
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -152,7 +133,7 @@ fn eval1(
                 env += (f.clone(), FixClosure(f, b, e.clone(), env.clone()));
                 Ok((Expr(e), env, k))
             }
-            Some(Frame::AppH(BuiltIn(fun))) => Ok((Val(fun(v)?), env, k)),
+            Some(Frame::AppH(BuiltIn(fun))) => Ok((Val(fun.apply(v)?), env, k)),
             Some(f @ Frame::AppH(_)) => {
                 k.push(f);
                 Err(EvalError::InvalidState((Val(v), env, k)))

@@ -1,10 +1,11 @@
+use crate::built_in::{self, BuiltInFn};
 use crate::environment::Environment;
-use crate::expression::{Expression, Literal};
-use crate::interpreter::{self, BuiltInFn, Value};
+use crate::expression::Expression;
+use crate::interpreter::{self, Value};
 use crate::parser::{self, Item};
 use crate::type_checking::model::{MonoType, PolyType};
 use crate::type_checking::{self, substitution::Substitute};
-use std::{fmt::Display, iter, sync::LazyLock};
+use std::{fmt::Display, iter};
 
 #[derive(Clone)]
 pub struct Program {
@@ -25,25 +26,6 @@ pub enum ProgramError {
 }
 
 pub type Result<T> = std::result::Result<T, ProgramError>;
-
-pub static BUILT_INS: LazyLock<Environment<BuiltInFn>> = LazyLock::new(|| {
-    let mut env = Environment::new();
-    env += (
-        "add".to_owned(),
-        std::sync::Arc::new(move |x| {
-            let Value::Lit(Literal::Int(x)) = x else {
-                unimplemented!()
-            };
-            Ok(Value::BuiltIn(std::sync::Arc::new(move |y| {
-                let Value::Lit(Literal::Int(y)) = y else {
-                    unimplemented!()
-                };
-                Ok(Value::Lit(Literal::Int(x + y)))
-            })))
-        }) as BuiltInFn,
-    );
-    env
-});
 
 impl Display for ProgramError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -69,7 +51,10 @@ impl Program {
         for item in items {
             match item {
                 Item::Definition(name, expr) => {
-                    if definitions.contains_name(&name) || built_ins.contains_name(&name) {
+                    if definitions.contains_name(&name)
+                        || built_ins.contains_name(&name)
+                        || main.is_some() && name == "main"
+                    {
                         return Err(ProgramError::DuplicateDefinition(name));
                     } else if name == "main" {
                         main = Some(expr);
@@ -87,7 +72,7 @@ impl Program {
                     if definitions.contains_name(&name) || built_ins.contains_name(&name) {
                         return Err(ProgramError::DuplicateDefinition(name));
                     }
-                    let Some(fun) = BUILT_INS.get(&name) else {
+                    let Some(fun) = built_in::BUILT_INS.get(&name) else {
                         return Err(ProgramError::UnknownBuiltIn(name));
                     };
                     built_ins += (name, fun.clone());
