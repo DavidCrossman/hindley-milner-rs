@@ -23,8 +23,6 @@ pub enum Expression {
     Fix(String, Binding, Box<Expression>),
 }
 
-pub type Program = Vec<(String, Expression)>;
-
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

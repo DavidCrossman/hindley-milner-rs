@@ -38,8 +38,8 @@ pub enum TypeError {
 impl Display for TypeVariable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeVariable::UserDefined(s) => s.fmt(f),
-            TypeVariable::Inferred(n) => write!(f, "τ{n}"),
+            Self::UserDefined(s) => s.fmt(f),
+            Self::Inferred(n) => write!(f, "τ{n}"),
         }
     }
 }
@@ -66,8 +66,8 @@ impl Display for TypeConstructor {
 impl Display for MonoType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MonoType::Var(t) => t.fmt(f),
-            MonoType::Con(c) => c.fmt(f),
+            Self::Var(t) => t.fmt(f),
+            Self::Con(c) => c.fmt(f),
         }
     }
 }
@@ -84,9 +84,9 @@ impl Display for PolyType {
 impl Display for TypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TypeError::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
-            TypeError::InfiniteType(t, m) => write!(f, "cannot construct infinite type {t} = {m}"),
-            TypeError::ConstructorConflict(c1, c2) => write!(f, "expected type {c1}, found {c2}"),
+            Self::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
+            Self::InfiniteType(t, m) => write!(f, "cannot construct infinite type {t} = {m}"),
+            Self::ConstructorConflict(c1, c2) => write!(f, "expected type {c1}, found {c2}"),
         }
     }
 }
@@ -125,13 +125,13 @@ impl From<MonoType> for PolyType {
 }
 
 impl MonoType {
-    pub fn traverse(&mut self, f: &mut impl FnMut(&mut MonoType)) {
+    pub fn traverse(&mut self, f: &mut impl FnMut(&mut Self)) {
         use TypeConstructor::*;
         f(self);
         match self {
-            MonoType::Var(_) | MonoType::Con(Unit | Bool | Int) => {}
-            MonoType::Con(List(m)) => m.traverse(f),
-            MonoType::Con(Function(l, r)) => {
+            Self::Var(_) | Self::Con(Unit | Bool | Int) => {}
+            Self::Con(List(m)) => m.traverse(f),
+            Self::Con(Function(l, r)) => {
                 l.traverse(f);
                 r.traverse(f);
             }
@@ -141,10 +141,10 @@ impl MonoType {
     pub fn vars(&self) -> impl Iterator<Item = &TypeVariable> {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
-            MonoType::Var(t) => Box::new(iter::once(t)),
-            MonoType::Con(Unit | Bool | Int) => Box::new(iter::empty()),
-            MonoType::Con(List(m)) => m.vars(),
-            MonoType::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
+            Self::Var(t) => Box::new(iter::once(t)),
+            Self::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            Self::Con(List(m)) => m.vars(),
+            Self::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
         };
         iter
     }
@@ -152,22 +152,18 @@ impl MonoType {
     pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut TypeVariable> {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
-            MonoType::Var(t) => Box::new(iter::once(t)),
-            MonoType::Con(Unit | Bool | Int) => Box::new(iter::empty()),
-            MonoType::Con(List(m)) => m.vars_mut(),
-            MonoType::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
+            Self::Var(t) => Box::new(iter::once(t)),
+            Self::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            Self::Con(List(m)) => m.vars_mut(),
+            Self::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
         };
         iter
     }
 
     pub fn generalise(self, env: &Environment<PolyType>) -> PolyType {
+        let diff = &self.free_vars() - &env.free_vars();
         PolyType {
-            quantifiers: self
-                .free_vars()
-                .difference(&env.free_vars())
-                .copied()
-                .cloned()
-                .collect(),
+            quantifiers: diff.into_iter().cloned().collect(),
             mono: self,
         }
     }
@@ -176,9 +172,7 @@ impl MonoType {
 impl PolyType {
     pub fn instantiate(mut self, next_fresh: usize) -> (MonoType, usize) {
         let n = next_fresh + self.quantifiers.len();
-        let mappings = self
-            .quantifiers
-            .into_iter()
+        let mappings = (self.quantifiers.into_iter())
             .zip((next_fresh..).map(TypeVariable::Inferred))
             .collect::<HashMap<_, _>>();
         self.mono.vars_mut().for_each(|t1| {

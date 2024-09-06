@@ -14,9 +14,9 @@ pub enum Item {
 impl Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Item::Definition(s, e) => write!(f, "{s} = {e}"),
-            Item::BuiltInDefinition(s) => write!(f, "{s} = builtin"),
-            Item::Declaration(s, p) => write!(f, "{s} : {p}"),
+            Self::Definition(s, e) => write!(f, "{s} = {e}"),
+            Self::BuiltInDefinition(s) => write!(f, "{s} = builtin"),
+            Self::Declaration(s, p) => write!(f, "{s} : {p}"),
         }
     }
 }

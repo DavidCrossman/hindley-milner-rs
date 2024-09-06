@@ -1,7 +1,7 @@
 use crate::environment::Environment;
-use crate::expression::{Binding, Expression, Literal, Program};
+use crate::expression::{Binding, Expression, Literal};
 use std::fmt::Display;
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub enum Value {
@@ -11,13 +11,13 @@ pub enum Value {
     BuiltIn(BuiltInFn),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Control {
     Val(Value),
     Expr(Expression),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Frame {
     HApp(Expression, Environment<Value>),
     AppH(Value),
@@ -27,24 +27,40 @@ type Continuation = Vec<Frame>;
 
 type State = (Control, Environment<Value>, Continuation);
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum EvalError {
-    NoMain,
     UnknownVariable(String),
     InvalidState(State),
 }
 
 pub type Result<T> = std::result::Result<T, EvalError>;
 
-pub type BuiltInFn = Rc<dyn Fn(Value) -> Result<Value>>;
+pub type BuiltInFn = Arc<dyn Fn(Value) -> Result<Value> + Send + Sync>;
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Lit(lit) => f.debug_tuple("Lit").field(lit).finish(),
+            Self::Closure(b, e, env) => f.debug_tuple("Closure").field(b).field(e).field(env).finish(),
+            Self::FixClosure(x, b, e, env) => f
+                .debug_tuple("FixClosure")
+                .field(x)
+                .field(b)
+                .field(e)
+                .field(env)
+                .finish(),
+            Self::BuiltIn(_) => f.debug_tuple("BuiltIn").finish(),
+        }
+    }
+}
 
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Lit(lit) => lit.fmt(f),
-            Value::Closure(b, e, env) => write!(f, "λ{env} {b} → {e}"),
-            Value::FixClosure(x, b, e, env) => write!(f, "fix {x} λ{env} {b} → {e}"),
-            Value::BuiltIn(_) => "λ ? → ?".fmt(f),
+            Self::Lit(lit) => lit.fmt(f),
+            Self::Closure(b, e, env) => write!(f, "λ{env} {b} → {e}"),
+            Self::FixClosure(x, b, e, env) => write!(f, "fix {x} λ{env} {b} → {e}"),
+            Self::BuiltIn(_) => "λ ? → ?".fmt(f),
         }
     }
 }
@@ -52,8 +68,8 @@ impl Display for Value {
 impl Display for Control {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Control::Val(v) => v.fmt(f),
-            Control::Expr(e) => e.fmt(f),
+            Self::Val(v) => v.fmt(f),
+            Self::Expr(e) => e.fmt(f),
         }
     }
 }
@@ -61,8 +77,8 @@ impl Display for Control {
 impl Display for Frame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Frame::HApp(e, env) => write!(f, "HApp ({e}) {env}"),
-            Frame::AppH(e) => write!(f, "AppH ({e})"),
+            Self::HApp(e, env) => write!(f, "HApp ({e}) {env}"),
+            Self::AppH(e) => write!(f, "AppH ({e})"),
         }
     }
 }
@@ -70,9 +86,8 @@ impl Display for Frame {
 impl Display for EvalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EvalError::NoMain => write!(f, "no 'main' definition found"),
-            EvalError::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
-            EvalError::InvalidState((e, env, k)) => {
+            Self::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
+            Self::InvalidState((e, env, k)) => {
                 write!(
                     f,
                     "invalid state:\ncontrol: {e}\nenvironment: {env}\nnext frame: {}",
@@ -81,19 +96,6 @@ impl Display for EvalError {
             }
         }
     }
-}
-
-pub fn run(program: &Program, built_ins: &Environment<BuiltInFn>) -> Result<Value> {
-    let (_, expr_main) = program
-        .iter()
-        .find(|(name, _)| name == "main")
-        .ok_or(EvalError::NoMain)?;
-    let global = program
-        .iter()
-        .filter(|(name, _)| name != "main")
-        .cloned()
-        .collect();
-    eval(expr_main, &global, built_ins)
 }
 
 pub fn eval(

@@ -37,7 +37,7 @@ pub fn w(
         Expression::Abs(b, e) => {
             let beta = MonoType::Var(n.into());
             let env = match b {
-                Binding::Var(x) => &(env.clone() + (x.clone(), beta.clone())),
+                Binding::Var(x) => &(env.clone() + (x.clone(), beta.clone().into())),
                 Binding::Discard => env,
             };
             let (s, m, n) = w(env, e, n + 1)?;
@@ -55,7 +55,7 @@ pub fn w(
         }
         Expression::Fix(f, b, e) => {
             let beta = MonoType::Var(n.into());
-            let env = env.clone() + (f.clone(), beta.clone());
+            let env = env.clone() + (f.clone(), beta.clone().into());
             let (s1, m1, n) = w(&env, &Expression::Abs(b.clone(), e.clone()), n + 1)?;
             let s2 = unify(beta.substitute(&s1), m1.clone())?;
             Ok((s1.combine(&s2), m1.substitute(&s2), n))
@@ -100,7 +100,7 @@ pub fn m(
             let s1 = unify(t, t2)?;
             let mut env = env.clone().substitute(&s1);
             if let Binding::Var(x) = b {
-                env += (x.clone(), beta1.substitute(&s1));
+                env += (x.clone(), beta1.substitute(&s1).into());
             }
             let (s2, n) = m(&env, e, beta2.substitute(&s1), n + 2)?;
             Ok((s1.combine(&s2), n))
@@ -116,7 +116,7 @@ pub fn m(
             Ok((s1.combine(&s2), n))
         }
         Expression::Fix(f, x, e) => {
-            let env = env.clone() + (f.clone(), t.clone());
+            let env = env.clone() + (f.clone(), t.clone().into());
             m(&env, &Expression::Abs(x.clone(), e.clone()), t, n)
         }
     }

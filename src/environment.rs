@@ -30,16 +30,16 @@ impl<T> Extend<(String, T)> for Environment<T> {
     }
 }
 
-impl<T, U: Into<T>> AddAssign<(String, U)> for Environment<T> {
-    fn add_assign(&mut self, (name, x): (String, U)) {
-        self.map.insert(name, x.into());
+impl<T> AddAssign<(String, T)> for Environment<T> {
+    fn add_assign(&mut self, (name, x): (String, T)) {
+        self.map.insert(name, x);
     }
 }
 
-impl<T, U: Into<T>> Add<(String, U)> for Environment<T> {
+impl<T> Add<(String, T)> for Environment<T> {
     type Output = Self;
 
-    fn add(mut self, rhs: (String, U)) -> Self::Output {
+    fn add(mut self, rhs: (String, T)) -> Self::Output {
         self += rhs;
         self
     }
@@ -61,6 +61,10 @@ impl<T: Display> Display for Environment<T> {
 impl<T> Environment<T> {
     pub fn new() -> Self {
         Self { map: HashMap::new() }
+    }
+
+    pub fn contains_name(&self, name: &str) -> bool {
+        self.map.contains_key(name)
     }
 
     pub fn get(&self, name: &str) -> Option<&T> {
