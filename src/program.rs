@@ -63,10 +63,10 @@ impl Program {
                     if definitions.contains_name(&name) || built_ins.contains_name(&name) {
                         return Err(ProgramError::DuplicateDefinition(name));
                     }
-                    let Some(fun) = built_in::BUILT_INS.get(&name) else {
+                    let Some(fun) = built_in::BUILT_INS.get(&name).cloned() else {
                         return Err(ProgramError::UnknownBuiltIn(name));
                     };
-                    built_ins += (name, fun.clone());
+                    built_ins += (name, fun);
                 }
             }
         }

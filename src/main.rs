@@ -19,8 +19,8 @@ fn main() {
             Ok(items) => match program::Program::new(items) {
                 Ok(program) => match program.type_check() {
                     Ok(_) => match program.run() {
-                        Ok(e) => println!("{e}"),
-                        Err(e) => println!("runtime error: {e}"),
+                        Ok(v) => println!("{v}"),
+                        Err(e) => println!("runtime error: {:?}", anyhow::Error::from(e)),
                     },
                     Err(e) => println!("type error: {e}"),
                 },
