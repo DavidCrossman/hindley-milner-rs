@@ -62,7 +62,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lang-sandbox"
+name = "hindley-milner-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
