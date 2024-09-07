@@ -1,4 +1,5 @@
-use super::{model::*, substitution::*, unification::unify, Result};
+use super::{model::*, substitution::*, unification::unify};
+use super::{Result, TypeError};
 use crate::environment::Environment;
 use crate::expression::{Binding, Expression, Literal};
 

@@ -2,6 +2,7 @@ use crate::built_in::BuiltInFn;
 use crate::environment::Environment;
 use crate::expression::{Binding, Expression, Literal};
 use std::fmt::Display;
+use thiserror::Error;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -27,10 +28,14 @@ type Continuation = Vec<Frame>;
 
 type State = (Control, Environment<Value>, Continuation);
 
-#[derive(Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum EvalError {
+    #[error("variable '{0}' is not defined")]
     UnknownVariable(String),
-    InvalidState(State),
+    #[error("invalid state: control = {0}; environment = {1}; next frame = {2}")]
+    InvalidState(Control, Environment<Value>, Frame),
+    #[error("error in built-in function '{0}'")]
+    BuiltIn(String, #[source] anyhow::Error),
 }
 
 pub type Result<T> = std::result::Result<T, EvalError>;
@@ -41,7 +46,7 @@ impl Display for Value {
             Self::Lit(lit) => lit.fmt(f),
             Self::Closure(b, e, env) => write!(f, "λ{env} {b} → {e}"),
             Self::FixClosure(x, b, e, env) => write!(f, "fix {x} λ{env} {b} → {e}"),
-            Self::BuiltIn(_) => "λ ? → ?".fmt(f),
+            Self::BuiltIn(fun) => fun.fmt(f),
         }
     }
 }
@@ -60,21 +65,6 @@ impl Display for Frame {
         match self {
             Self::HApp(e, env) => write!(f, "HApp ({e}) {env}"),
             Self::AppH(e) => write!(f, "AppH ({e})"),
-        }
-    }
-}
-
-impl Display for EvalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
-            Self::InvalidState((e, env, k)) => {
-                write!(
-                    f,
-                    "invalid state:\ncontrol: {e}\nenvironment: {env}\nnext frame: {}",
-                    k.first().map_or("None".to_owned(), |f| f.to_string())
-                )
-            }
         }
     }
 }
@@ -134,10 +124,7 @@ fn eval1(
                 Ok((Expr(e), env, k))
             }
             Some(Frame::AppH(BuiltIn(fun))) => Ok((Val(fun.apply(v)?), env, k)),
-            Some(f @ Frame::AppH(_)) => {
-                k.push(f);
-                Err(EvalError::InvalidState((Val(v), env, k)))
-            }
+            Some(f @ Frame::AppH(_)) => Err(EvalError::InvalidState(Val(v), env, f)),
             None => Ok((Val(v), env, k)),
         },
     }

@@ -13,7 +13,6 @@ pub enum TypeConstructor {
     Bool,
     Int,
     Function(Box<MonoType>, Box<MonoType>),
-    List(Box<MonoType>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -26,13 +25,6 @@ pub enum MonoType {
 pub struct PolyType {
     pub quantifiers: Vec<TypeVariable>,
     pub mono: MonoType,
-}
-
-#[derive(Clone, Debug)]
-pub enum TypeError {
-    UnknownVariable(String),
-    InfiniteType(TypeVariable, MonoType),
-    ConstructorConflict(TypeConstructor, TypeConstructor),
 }
 
 impl Display for TypeVariable {
@@ -55,10 +47,6 @@ impl Display for TypeConstructor {
                 MonoType::Con(Function(_, _)) => write!(f, "({l}) → {r}"),
                 MonoType::Var(_) | MonoType::Con(_) => write!(f, "{l} → {r}"),
             },
-            List(m) => match **m {
-                MonoType::Con(Function(_, _)) => write!(f, "List ({m})"),
-                MonoType::Var(_) | MonoType::Con(_) => write!(f, "List {m}"),
-            },
         }
     }
 }
@@ -78,16 +66,6 @@ impl Display for PolyType {
             write!(f, "∀{t}. ")?;
         }
         write!(f, "{}", self.mono)
-    }
-}
-
-impl Display for TypeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnknownVariable(x) => write!(f, "variable '{x}' is not defined"),
-            Self::InfiniteType(t, m) => write!(f, "cannot construct infinite type {t} = {m}"),
-            Self::ConstructorConflict(c1, c2) => write!(f, "expected type {c1}, found {c2}"),
-        }
     }
 }
 
@@ -130,7 +108,6 @@ impl MonoType {
         f(self);
         match self {
             Self::Var(_) | Self::Con(Unit | Bool | Int) => {}
-            Self::Con(List(m)) => m.traverse(f),
             Self::Con(Function(l, r)) => {
                 l.traverse(f);
                 r.traverse(f);
@@ -143,7 +120,6 @@ impl MonoType {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
             Self::Con(Unit | Bool | Int) => Box::new(iter::empty()),
-            Self::Con(List(m)) => m.vars(),
             Self::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
         };
         iter
@@ -154,7 +130,6 @@ impl MonoType {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
             Self::Con(Unit | Bool | Int) => Box::new(iter::empty()),
-            Self::Con(List(m)) => m.vars_mut(),
             Self::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
         };
         iter

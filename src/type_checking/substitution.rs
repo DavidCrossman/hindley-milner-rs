@@ -39,14 +39,10 @@ impl FromIterator<(TypeVariable, MonoType)> for Substitution {
 
 impl Display for Substitution {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{{{}}}",
-            self.iter()
-                .map(|(x, m)| format!("{x} -> {m}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
+        let mappings = (self.iter())
+            .map(|(x, m)| format!("{x} -> {m}"))
+            .collect::<Vec<_>>();
+        write!(f, "{{{}}}", mappings.join(", "))
     }
 }
 

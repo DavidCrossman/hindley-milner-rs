@@ -5,7 +5,7 @@ use crate::interpreter::{self, Value};
 use crate::parser::{self, Item};
 use crate::type_checking::model::{MonoType, PolyType};
 use crate::type_checking::{self, substitution::Substitute};
-use std::{fmt::Display, iter};
+use thiserror::Error;
 
 #[derive(Clone)]
 pub struct Program {
@@ -15,32 +15,23 @@ pub struct Program {
     built_ins: Environment<BuiltInFn>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Error, Debug)]
 pub enum ProgramError {
+    #[error("no 'main' definition found")]
     NoMain,
+    #[error("missing definition for '{0}'")]
     MissingDefinition(String),
+    #[error("unknown built-in function '{0}'")]
     UnknownBuiltIn(String),
+    #[error("missing type signature for built-in function '{0}'")]
     BuiltInMissingSignature(String),
+    #[error("duplicate definitions for '{0}'")]
     DuplicateDefinition(String),
+    #[error("duplicate type signatures for '{0}'")]
     DuplicateSignature(String),
 }
 
 pub type Result<T> = std::result::Result<T, ProgramError>;
-
-impl Display for ProgramError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NoMain => write!(f, "no 'main' definition found"),
-            Self::MissingDefinition(s) => write!(f, "missing definition for '{s}'"),
-            Self::UnknownBuiltIn(s) => write!(f, "unknown built-in function '{s}'"),
-            Self::BuiltInMissingSignature(s) => {
-                write!(f, "missing type signature for built-in function '{s}'")
-            }
-            Self::DuplicateDefinition(s) => write!(f, "duplicate definitions for '{s}'"),
-            Self::DuplicateSignature(s) => write!(f, "duplicate type signatures for '{s}'"),
-        }
-    }
-}
 
 impl Program {
     pub fn new(items: impl IntoIterator<Item = parser::Item>) -> Result<Self> {
@@ -98,7 +89,7 @@ impl Program {
     pub fn type_check(&self) -> type_checking::Result<Environment<PolyType>> {
         let mut env = self.declarations.clone();
         let main_def = (&"main".to_owned(), &self.main);
-        for (name, expr) in self.definitions.iter().chain(iter::once(main_def)) {
+        for (name, expr) in self.definitions.iter().chain(std::iter::once(main_def)) {
             let (t, n) = match env.remove(name) {
                 Some(p) => p.instantiate(0),
                 None => (MonoType::Var(0.into()), 1),

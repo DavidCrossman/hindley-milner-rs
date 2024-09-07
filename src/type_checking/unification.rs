@@ -1,6 +1,6 @@
-use super::model::{MonoType, TypeConstructor, TypeError};
+use super::model::{MonoType, TypeConstructor};
 use super::substitution::*;
-use super::Result;
+use super::{Result, TypeError};
 
 pub fn unify(m1: MonoType, m2: MonoType) -> Result<Substitution> {
     match (m1, m2) {
@@ -24,7 +24,6 @@ fn unify_con(c1: TypeConstructor, c2: TypeConstructor) -> Result<Substitution> {
             let s2 = unify(r1.substitute(&s1), r2.substitute(&s1))?;
             Ok(s1.combine(&s2))
         }
-        (TypeConstructor::List(t1), TypeConstructor::List(t2)) => unify(*t1, *t2),
         (c1, c2) => Err(TypeError::ConstructorConflict(c1, c2)),
     }
 }
