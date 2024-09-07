@@ -62,7 +62,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hindley-milner-rs"
+name = "hindley-milner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
