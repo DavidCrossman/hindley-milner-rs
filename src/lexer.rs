@@ -11,11 +11,13 @@ pub enum Token {
     LeftParen,
     RightParen,
     BuiltIn,
+    TypeSum,
     UnitType,
     IntType,
     Unit,
     Int(i64),
-    Ident(String),
+    ValueIdent(String),
+    TypeIdent(String),
     Discard,
     Separator,
 }
@@ -35,7 +37,16 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
             if tokens.last().is_some_and(|t| {
                 matches!(
                     t,
-                    BuiltIn | UnitType | IntType | Ident(_) | Unit | Int(_) | LeftParen | RightParen
+                    BuiltIn
+                        | TypeSum
+                        | UnitType
+                        | IntType
+                        | ValueIdent(_)
+                        | TypeIdent(_)
+                        | Unit
+                        | Int(_)
+                        | LeftParen
+                        | RightParen
                 )
             }) {
                 tokens.push(Token::Separator);
@@ -46,7 +57,11 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
 }
 
 fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone {
-    let ident_lexer = filter(|c: &char| c.is_ascii_alphabetic())
+    let value_ident_lexer = filter(char::is_ascii_lowercase)
+        .chain::<char, _, _>(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
+        .collect();
+
+    let type_ident_lexer = filter(char::is_ascii_uppercase)
         .chain::<char, _, _>(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
         .collect();
 
@@ -60,6 +75,7 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
         one_of("λ\\").to(Token::Lambda),
         just("->").or(just("→")).to(Token::Arrow),
         just('=').to(Token::Assign),
+        just('+').to(Token::TypeSum),
         just(':').to(Token::OfType),
         just('(').to(Token::LeftParen),
         just(')').to(Token::RightParen),
@@ -69,7 +85,8 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
                 .map(Token::Int)
                 .map_err(|e| Simple::custom(span, format!("{e}")))
         }),
-        ident_lexer.map(Token::Ident),
+        value_ident_lexer.map(Token::ValueIdent),
+        type_ident_lexer.map(Token::TypeIdent),
         just('_')
             .then(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
             .to(Token::Discard),

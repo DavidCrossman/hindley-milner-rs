@@ -1,16 +1,16 @@
 use crate::built_in::{self, BuiltInFn};
 use crate::environment::Environment;
 use crate::expression::Expression;
-use crate::interpreter::{self, Value};
-use crate::parser::{self, Item};
-use crate::type_checking::model::{MonoType, PolyType};
+use crate::interpreter::{self, Control, Value};
+use crate::parser::{self, DataConstructor, Item};
+use crate::type_checking::model::{MonoType, PolyType, TypeConstructor};
 use crate::type_checking::{self, substitution::Substitute};
 use thiserror::Error;
 
 #[derive(Clone)]
 pub struct Program {
     main: Expression,
-    definitions: Environment<Expression>,
+    global: Environment<Control>,
     declarations: Environment<PolyType>,
     built_ins: Environment<BuiltInFn>,
 }
@@ -36,13 +36,13 @@ pub type Result<T> = std::result::Result<T, ProgramError>;
 impl Program {
     pub fn new(items: impl IntoIterator<Item = parser::Item>) -> Result<Self> {
         let mut main = None;
-        let mut definitions = Environment::new();
+        let mut global = Environment::new();
         let mut declarations = Environment::new();
         let mut built_ins = Environment::new();
         for item in items {
             match item {
-                Item::Definition(name, expr) => {
-                    if definitions.contains_name(&name)
+                Item::ValueDefinition(name, expr) => {
+                    if global.contains_name(&name)
                         || built_ins.contains_name(&name)
                         || main.is_some() && name == "main"
                     {
@@ -50,17 +50,11 @@ impl Program {
                     } else if name == "main" {
                         main = Some(expr);
                     } else {
-                        definitions += (name, expr);
+                        global += (name, Control::Expr(expr));
                     }
-                }
-                Item::Declaration(name, m) => {
-                    if declarations.contains_name(&name) {
-                        return Err(ProgramError::DuplicateSignature(name));
-                    }
-                    declarations += (name, m.generalise(&declarations));
                 }
                 Item::BuiltInDefinition(name) => {
-                    if definitions.contains_name(&name) || built_ins.contains_name(&name) {
+                    if global.contains_name(&name) || built_ins.contains_name(&name) {
                         return Err(ProgramError::DuplicateDefinition(name));
                     }
                     let Some(fun) = built_in::BUILT_INS.get(&name).cloned() else {
@@ -68,10 +62,35 @@ impl Program {
                     };
                     built_ins += (name, fun);
                 }
+                Item::TypeDefinition(type_name, sum) => sum.into_iter().for_each(|cons| {
+                    let DataConstructor { name, params } = cons;
+                    if params.is_empty() {
+                        let m = MonoType::Con(TypeConstructor::Custom(type_name.clone()));
+                        declarations += (name.clone(), m.generalise(&declarations));
+                        global += (name.clone(), Control::Val(Value::Custom(name, Vec::new())))
+                    } else {
+                        let arity = params.len();
+                        let m = params.into_iter().rev().fold(
+                            MonoType::Con(TypeConstructor::Custom(type_name.clone())),
+                            |m, con| TypeConstructor::Function(Box::new(con.into()), Box::new(m)).into(),
+                        );
+                        declarations += (name.clone(), m.generalise(&declarations));
+                        global += (
+                            name.clone(),
+                            Control::Val(Value::BuiltIn(BuiltInFn::make_data_constructor(name, arity))),
+                        );
+                    }
+                }),
+                Item::Declaration(name, m) => {
+                    if declarations.contains_name(&name) {
+                        return Err(ProgramError::DuplicateSignature(name));
+                    }
+                    declarations += (name, m.generalise(&declarations));
+                }
             }
         }
-        if let Some(name) = (declarations.names())
-            .find(|name| !definitions.contains_name(name) && !built_ins.contains_name(name))
+        if let Some(name) =
+            (declarations.names()).find(|name| !global.contains_name(name) && !built_ins.contains_name(name))
         {
             return Err(ProgramError::MissingDefinition(name.clone()));
         }
@@ -80,27 +99,31 @@ impl Program {
         }
         Ok(Self {
             main: main.ok_or(ProgramError::NoMain)?,
-            definitions,
+            global,
             declarations,
             built_ins,
         })
     }
 
     pub fn type_check(&self) -> type_checking::Result<Environment<PolyType>> {
-        let mut env = self.declarations.clone();
-        let main_def = (&"main".to_owned(), &self.main);
-        for (name, expr) in self.definitions.iter().chain(std::iter::once(main_def)) {
-            let (t, n) = match env.remove(name) {
-                Some(p) => p.instantiate(0),
-                None => (MonoType::Var(0.into()), 1),
-            };
-            let (s, _) = type_checking::algorithm::m(&env, expr, t.clone(), n)?;
-            env += (name.clone(), t.substitute(&s).generalise(&env));
-        }
-        Ok(env)
+        (self.global.iter())
+            .filter_map(|(name, c)| match c {
+                Control::Expr(e) => Some((name, e)),
+                _ => None,
+            })
+            .chain(std::iter::once((&"main".to_owned(), &self.main)))
+            .try_fold(self.declarations.clone(), |mut env, (name, expr)| {
+                let (t, n) = match env.remove(name) {
+                    Some(p) => p.instantiate(0),
+                    None => (MonoType::Var(0.into()), 1),
+                };
+                let (s, _) = type_checking::algorithm::m(&env, expr, t.clone(), n)?;
+                let p = t.substitute(&s).generalise(&env).requantify();
+                Ok(env + (name.clone(), p))
+            })
     }
 
     pub fn run(&self) -> interpreter::Result<Value> {
-        interpreter::eval(&self.main, &self.definitions, &self.built_ins)
+        interpreter::eval(&self.main, &self.global, &self.built_ins)
     }
 }

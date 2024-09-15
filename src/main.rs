@@ -10,9 +10,8 @@ pub mod type_checking;
 
 fn main() {
     let source = r"
-        add : Int -> Int -> Int
-        add = builtin
-        main = add 5 7
+        Nat = zero + succ Nat
+        main = succ (succ zero)
     ";
     match lexer::lex(source) {
         Ok(tokens) => match parser::parse(&tokens) {

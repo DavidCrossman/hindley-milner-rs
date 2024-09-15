@@ -10,6 +10,7 @@ pub enum Value {
     Closure(Binding, Expression, Environment<Value>),
     FixClosure(String, Binding, Expression, Environment<Value>),
     BuiltIn(BuiltInFn),
+    Custom(String, Vec<Value>),
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +48,10 @@ impl Display for Value {
             Self::Closure(b, e, env) => write!(f, "λ{env} {b} → {e}"),
             Self::FixClosure(x, b, e, env) => write!(f, "fix {x} λ{env} {b} → {e}"),
             Self::BuiltIn(fun) => fun.fmt(f),
+            Self::Custom(name, values) => {
+                let values = values.iter().map(ToString::to_string).collect::<Vec<_>>();
+                write!(f, "{name} ⟨{}⟩", values.join(","))
+            }
         }
     }
 }
@@ -71,7 +76,7 @@ impl Display for Frame {
 
 pub fn eval(
     expr: &Expression,
-    global: &Environment<Expression>,
+    global: &Environment<Control>,
     built_ins: &Environment<BuiltInFn>,
 ) -> Result<Value> {
     let mut s = (Control::Expr(expr.clone()), Environment::new(), Vec::new());
@@ -85,7 +90,7 @@ pub fn eval(
 
 fn eval1(
     (c, mut env, mut k): State,
-    global: &Environment<Expression>,
+    global: &Environment<Control>,
     built_ins: &Environment<BuiltInFn>,
 ) -> Result<State> {
     use Control::{Expr, Val};
@@ -94,7 +99,7 @@ fn eval1(
     match c {
         Expr(ExprLit(lit)) => Ok((Val(ValLit(lit)), env, k)),
         Expr(Var(x)) => (env.remove(&x).map(Val))
-            .or_else(|| global.get(&x).cloned().map(Expr))
+            .or_else(|| global.get(&x).cloned())
             .or_else(|| built_ins.get(&x).cloned().map(BuiltIn).map(Val))
             .ok_or(EvalError::UnknownVariable(x))
             .map(|c| (c, env, k)),

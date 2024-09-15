@@ -12,6 +12,7 @@ pub enum TypeConstructor {
     Unit,
     Int,
     Function(Box<MonoType>, Box<MonoType>),
+    Custom(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -45,6 +46,7 @@ impl Display for TypeConstructor {
                 MonoType::Con(Function(..)) => write!(f, "({l}) → {r}"),
                 MonoType::Var(_) | MonoType::Con(_) => write!(f, "{l} → {r}"),
             },
+            Custom(s) => s.fmt(f),
         }
     }
 }
@@ -105,7 +107,7 @@ impl MonoType {
         use TypeConstructor::*;
         f(self);
         match self {
-            Self::Var(_) | Self::Con(Unit | Int) => {}
+            Self::Var(_) | Self::Con(Unit | Int | Custom(_)) => {}
             Self::Con(Function(l, r)) => {
                 l.traverse(f);
                 r.traverse(f);
@@ -117,7 +119,7 @@ impl MonoType {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Int) => Box::new(iter::empty()),
+            Self::Con(Unit | Int | Custom(_)) => Box::new(iter::empty()),
             Self::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
         };
         iter
@@ -127,7 +129,7 @@ impl MonoType {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Int) => Box::new(iter::empty()),
+            Self::Con(Unit | Int | Custom(_)) => Box::new(iter::empty()),
             Self::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
         };
         iter

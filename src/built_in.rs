@@ -71,6 +71,22 @@ impl BuiltInFn {
             })))
         })
     }
+
+    pub fn make_data_constructor(name: String, arity: usize) -> Self {
+        Self::make_data_impl(name, arity, Vec::new())
+    }
+
+    fn make_data_impl(name: String, arity: usize, values: Vec<Value>) -> Self {
+        Self::new(name.clone(), move |v| {
+            let mut values = values.clone();
+            values.push(v);
+            if values.len() >= arity {
+                Ok(Value::Custom(name.clone(), values))
+            } else {
+                Ok(Value::BuiltIn(Self::make_data_impl(name.clone(), arity, values)))
+            }
+        })
+    }
 }
 
 impl ValueConversionError {
