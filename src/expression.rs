@@ -3,7 +3,6 @@ use std::fmt::Display;
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Literal {
     Unit,
-    Bool(bool),
     Int(i64),
 }
 
@@ -27,7 +26,6 @@ impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Literal::Unit => "()".fmt(f),
-            Literal::Bool(b) => b.fmt(f),
             Literal::Int(n) => n.fmt(f),
         }
     }

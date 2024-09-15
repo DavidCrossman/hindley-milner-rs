@@ -13,7 +13,6 @@ pub fn w(
             Substitution::new(),
             MonoType::Con(match lit {
                 Literal::Unit => TypeConstructor::Unit,
-                Literal::Bool(_) => TypeConstructor::Bool,
                 Literal::Int(_) => TypeConstructor::Int,
             }),
             n,
@@ -75,7 +74,6 @@ pub fn m(
             t,
             MonoType::Con(match lit {
                 Literal::Unit => TypeConstructor::Unit,
-                Literal::Bool(_) => TypeConstructor::Bool,
                 Literal::Int(_) => TypeConstructor::Int,
             }),
         )

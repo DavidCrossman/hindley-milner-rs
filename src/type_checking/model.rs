@@ -10,7 +10,6 @@ pub enum TypeVariable {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum TypeConstructor {
     Unit,
-    Bool,
     Int,
     Function(Box<MonoType>, Box<MonoType>),
 }
@@ -42,9 +41,8 @@ impl Display for TypeConstructor {
         match self {
             Unit => "Unit".fmt(f),
             Int => "Int".fmt(f),
-            Bool => "Bool".fmt(f),
             Function(l, r) => match **l {
-                MonoType::Con(Function(_, _)) => write!(f, "({l}) → {r}"),
+                MonoType::Con(Function(..)) => write!(f, "({l}) → {r}"),
                 MonoType::Var(_) | MonoType::Con(_) => write!(f, "{l} → {r}"),
             },
         }
@@ -107,7 +105,7 @@ impl MonoType {
         use TypeConstructor::*;
         f(self);
         match self {
-            Self::Var(_) | Self::Con(Unit | Bool | Int) => {}
+            Self::Var(_) | Self::Con(Unit | Int) => {}
             Self::Con(Function(l, r)) => {
                 l.traverse(f);
                 r.traverse(f);
@@ -119,7 +117,7 @@ impl MonoType {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            Self::Con(Unit | Int) => Box::new(iter::empty()),
             Self::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
         };
         iter
@@ -129,7 +127,7 @@ impl MonoType {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Bool | Int) => Box::new(iter::empty()),
+            Self::Con(Unit | Int) => Box::new(iter::empty()),
             Self::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
         };
         iter

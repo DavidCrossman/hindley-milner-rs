@@ -12,10 +12,8 @@ pub enum Token {
     RightParen,
     BuiltIn,
     UnitType,
-    BoolType,
     IntType,
     Unit,
-    Bool(bool),
     Int(i64),
     Ident(String),
     Discard,
@@ -37,7 +35,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
             if tokens.last().is_some_and(|t| {
                 matches!(
                     t,
-                    BuiltIn | UnitType | BoolType | IntType | Ident(_) | Unit | Int(_) | Bool(_) | RightParen
+                    BuiltIn | UnitType | IntType | Ident(_) | Unit | Int(_) | LeftParen | RightParen
                 )
             }) {
                 tokens.push(Token::Separator);
@@ -57,10 +55,7 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
         text::keyword("in").to(Token::In),
         text::keyword("builtin").to(Token::BuiltIn),
         text::keyword("Unit").to(Token::UnitType),
-        text::keyword("Bool").to(Token::BoolType),
         text::keyword("Int").to(Token::IntType),
-        text::keyword("true").to(Token::Bool(true)),
-        text::keyword("false").to(Token::Bool(false)),
         just("()").to(Token::Unit),
         one_of("λ\\").to(Token::Lambda),
         just("->").or(just("→")).to(Token::Arrow),
@@ -72,7 +67,7 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
         text::digits(10).try_map(|x: String, span| {
             x.parse()
                 .map(Token::Int)
-                .map_err(|e| Simple::custom(span, format!("{}", e)))
+                .map_err(|e| Simple::custom(span, format!("{e}")))
         }),
         ident_lexer.map(Token::Ident),
         just('_')

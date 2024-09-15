@@ -47,14 +47,8 @@ impl<T> Add<(String, T)> for Environment<T> {
 
 impl<T: Display> Display for Environment<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "[{}]",
-            self.iter()
-                .map(|(n, x)| format!("{n}={x}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        )
+        let assignments = self.iter().map(|(n, x)| format!("{n}={x}")).collect::<Vec<_>>();
+        write!(f, "[{}]", assignments.join(","))
     }
 }
 

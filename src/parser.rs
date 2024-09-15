@@ -78,7 +78,6 @@ fn type_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone 
     recursive(|type_parser| {
         let type_con_parser = select! {
             Token::UnitType => MonoType::Con(TypeConstructor::Unit),
-            Token::BoolType => MonoType::Con(TypeConstructor::Bool),
             Token::IntType => MonoType::Con(TypeConstructor::Int),
         };
 
@@ -102,7 +101,6 @@ fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clon
 
         let literal_parser = select! {
             Token::Unit => Expression::Lit(Literal::Unit),
-            Token::Bool(b) => Expression::Lit(Literal::Bool(b)),
             Token::Int(n) => Expression::Lit(Literal::Int(n)),
         };
 
