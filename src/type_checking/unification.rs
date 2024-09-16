@@ -24,6 +24,17 @@ fn unify_con(c1: TypeConstructor, c2: TypeConstructor) -> Result<Substitution> {
             let s2 = unify(r1.substitute(&s1), r2.substitute(&s1))?;
             Ok(s1.combine(&s2))
         }
+        (TypeConstructor::Custom(name1, types1), TypeConstructor::Custom(name2, types2))
+            if name1 == name2 =>
+        {
+            types1
+                .into_iter()
+                .zip(types2)
+                .try_fold(Substitution::new(), |s1, (m1, m2)| {
+                    let s2 = unify(m1.substitute(&s1), m2.substitute(&s1))?;
+                    Ok(s1.combine(&s2))
+                })
+        }
         (c1, c2) => Err(TypeError::ConstructorConflict(c1, c2)),
     }
 }

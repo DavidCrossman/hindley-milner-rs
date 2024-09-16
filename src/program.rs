@@ -1,9 +1,10 @@
 use crate::built_in::{self, BuiltInFn};
 use crate::environment::Environment;
 use crate::expression::Expression;
+use crate::free_variable::FreeVariable;
 use crate::interpreter::{self, Control, Value};
 use crate::parser::{self, DataConstructor, Item};
-use crate::type_checking::model::{MonoType, PolyType, TypeConstructor};
+use crate::type_checking::model::{Kind, MonoType, PolyType, TypeConstructor, TypeVariable};
 use crate::type_checking::{self, substitution::Substitute};
 use thiserror::Error;
 
@@ -12,6 +13,7 @@ pub struct Program {
     main: Expression,
     global: Environment<Control>,
     declarations: Environment<PolyType>,
+    type_constructors: Environment<Kind>,
     built_ins: Environment<BuiltInFn>,
 }
 
@@ -29,6 +31,8 @@ pub enum ProgramError {
     DuplicateDefinition(String),
     #[error("duplicate type signatures for '{0}'")]
     DuplicateSignature(String),
+    #[error("unknown type variable '{0}'")]
+    UnknownTypeVar(TypeVariable),
 }
 
 pub type Result<T> = std::result::Result<T, ProgramError>;
@@ -38,10 +42,11 @@ impl Program {
         let mut main = None;
         let mut global = Environment::new();
         let mut declarations = Environment::new();
+        let mut type_constructors = Environment::new();
         let mut built_ins = Environment::new();
         for item in items {
             match item {
-                Item::ValueDefinition(name, expr) => {
+                Item::TermDefinition(name, expr) => {
                     if global.contains_name(&name)
                         || built_ins.contains_name(&name)
                         || main.is_some() && name == "main"
@@ -62,35 +67,65 @@ impl Program {
                     };
                     built_ins += (name, fun);
                 }
-                Item::TypeDefinition(type_name, sum) => sum.into_iter().for_each(|cons| {
-                    let DataConstructor { name, params } = cons;
-                    if params.is_empty() {
-                        let m = MonoType::Con(TypeConstructor::Custom(type_name.clone()));
-                        declarations += (name.clone(), m.generalise(&declarations));
-                        global += (name.clone(), Control::Val(Value::Custom(name, Vec::new())))
-                    } else {
-                        let arity = params.len();
-                        let m = params.into_iter().rev().fold(
-                            MonoType::Con(TypeConstructor::Custom(type_name.clone())),
-                            |m, con| TypeConstructor::Function(Box::new(con.into()), Box::new(m)).into(),
-                        );
-                        declarations += (name.clone(), m.generalise(&declarations));
-                        global += (
-                            name.clone(),
-                            Control::Val(Value::BuiltIn(BuiltInFn::make_data_constructor(name, arity))),
-                        );
+                Item::TypeDefinition(type_name, params, sum) => {
+                    let kind = (0..params.len())
+                        .fold(Kind::Type, |k, _| Kind::Arrow(Box::new(Kind::Type), Box::new(k)));
+                    type_constructors += (type_name.clone(), kind);
+                    let con_type = MonoType::Con(TypeConstructor::Custom(
+                        type_name.clone(),
+                        params.iter().map(|p| MonoType::Var(p.clone().into())).collect(),
+                    ));
+                    for DataConstructor { name, types } in sum {
+                        let mut mono = con_type.clone();
+                        let c;
+                        if types.is_empty() {
+                            c = Control::Val(Value::Custom(name.clone(), Vec::new()));
+                        } else {
+                            let arity = types.len();
+                            mono = types.into_iter().rev().fold(mono, |m1, m2| {
+                                TypeConstructor::Function(Box::new(m2), Box::new(m1)).into()
+                            });
+                            mono.traverse(&mut |m| {
+                                if let MonoType::Var(TypeVariable::Named(name)) = &m {
+                                    if type_constructors.contains_name(name) {
+                                        *m = MonoType::Con(TypeConstructor::Custom(name.clone(), Vec::new()));
+                                    }
+                                }
+                            });
+                            let fun = BuiltInFn::make_data_constructor(name.clone(), arity);
+                            c = Control::Val(Value::BuiltIn(fun));
+                        }
+                        let p = PolyType::new(mono, params.clone());
+                        if let Some(&t) = p.free_vars().iter().next() {
+                            return Err(ProgramError::UnknownTypeVar(t.clone()));
+                        }
+                        if declarations.contains_name(&name) {
+                            return Err(ProgramError::DuplicateSignature(name));
+                        }
+                        if global.contains_name(&name) || built_ins.contains_name(&name) || name == "main" {
+                            return Err(ProgramError::DuplicateDefinition(name));
+                        }
+                        global += (name.clone(), c);
+                        declarations += (name, p);
                     }
-                }),
-                Item::Declaration(name, m) => {
+                }
+                Item::Declaration(name, mut m) => {
                     if declarations.contains_name(&name) {
                         return Err(ProgramError::DuplicateSignature(name));
                     }
+                    m.traverse(&mut |m| {
+                        if let MonoType::Var(TypeVariable::Named(name)) = &m {
+                            if type_constructors.contains_name(name) {
+                                *m = MonoType::Con(TypeConstructor::Custom(name.clone(), Vec::new()));
+                            }
+                        }
+                    });
                     declarations += (name, m.generalise(&declarations));
                 }
             }
         }
-        if let Some(name) =
-            (declarations.names()).find(|name| !global.contains_name(name) && !built_ins.contains_name(name))
+        if let Some(name) = (declarations.names())
+            .find(|name| !global.contains_name(name) && !built_ins.contains_name(name) && name != &"main")
         {
             return Err(ProgramError::MissingDefinition(name.clone()));
         }
@@ -101,6 +136,7 @@ impl Program {
             main: main.ok_or(ProgramError::NoMain)?,
             global,
             declarations,
+            type_constructors,
             built_ins,
         })
     }

@@ -11,13 +11,13 @@ pub enum Token {
     LeftParen,
     RightParen,
     BuiltIn,
+    TypeDef,
     TypeSum,
     UnitType,
     IntType,
     Unit,
     Int(i64),
-    ValueIdent(String),
-    TypeIdent(String),
+    Ident(String),
     Discard,
     Separator,
 }
@@ -41,8 +41,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
                         | TypeSum
                         | UnitType
                         | IntType
-                        | ValueIdent(_)
-                        | TypeIdent(_)
+                        | Ident(_)
                         | Unit
                         | Int(_)
                         | LeftParen
@@ -57,11 +56,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
 }
 
 fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone {
-    let value_ident_lexer = filter(char::is_ascii_lowercase)
-        .chain::<char, _, _>(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
-        .collect();
-
-    let type_ident_lexer = filter(char::is_ascii_uppercase)
+    let ident_lexer = filter(char::is_ascii_alphabetic)
         .chain::<char, _, _>(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
         .collect();
 
@@ -69,6 +64,7 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
         text::keyword("let").to(Token::Let),
         text::keyword("in").to(Token::In),
         text::keyword("builtin").to(Token::BuiltIn),
+        text::keyword("type").to(Token::TypeDef),
         text::keyword("Unit").to(Token::UnitType),
         text::keyword("Int").to(Token::IntType),
         just("()").to(Token::Unit),
@@ -85,8 +81,7 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
                 .map(Token::Int)
                 .map_err(|e| Simple::custom(span, format!("{e}")))
         }),
-        value_ident_lexer.map(Token::ValueIdent),
-        type_ident_lexer.map(Token::TypeIdent),
+        ident_lexer.map(Token::Ident),
         just('_')
             .then(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
             .to(Token::Discard),

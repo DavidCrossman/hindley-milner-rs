@@ -7,34 +7,54 @@ use std::fmt::Display;
 #[derive(Clone, Debug)]
 pub struct DataConstructor {
     pub name: String,
-    pub params: Vec<TypeConstructor>,
+    pub types: Vec<MonoType>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Item {
-    ValueDefinition(String, Expression),
+    TypeDefinition(String, Vec<String>, Vec<DataConstructor>),
+    TermDefinition(String, Expression),
     BuiltInDefinition(String),
-    TypeDefinition(String, Vec<DataConstructor>),
     Declaration(String, MonoType),
 }
 
 impl Display for DataConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let product = self.params.iter().map(ToString::to_string).collect::<Vec<_>>();
-        write!(f, "{} {}", self.name, product.join("×"))
+        if self.types.is_empty() {
+            write!(f, "{}", self.name)
+        } else {
+            let product = self
+                .types
+                .iter()
+                .map(|m| match m {
+                    MonoType::Con(TypeConstructor::Custom(..) | TypeConstructor::Function(..)) => {
+                        format!("({m})")
+                    }
+                    MonoType::Var(_) | MonoType::Con(_) => m.to_string(),
+                })
+                .collect::<Vec<_>>();
+            write!(f, "{} {}", self.name, product.join(" "))
+        }
     }
 }
 
 impl Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ValueDefinition(s, e) => write!(f, "{s} = {e}"),
-            Self::BuiltInDefinition(s) => write!(f, "{s} = builtin"),
-            Self::TypeDefinition(s, cons) if !cons.is_empty() => {
-                let sum = cons.iter().map(ToString::to_string).collect::<Vec<_>>();
-                write!(f, "{s} = {}", sum.join(" + "))
+            Self::TypeDefinition(s, params, cons) => {
+                let mut s = format!("type {s}");
+                if !params.is_empty() {
+                    let params = params.iter().map(ToString::to_string).collect::<Vec<_>>();
+                    s = format!("{s} {}", params.join(" "));
+                }
+                if !cons.is_empty() {
+                    let sum = cons.iter().map(ToString::to_string).collect::<Vec<_>>();
+                    s = format!("{s} = {}", sum.join(" + "));
+                }
+                write!(f, "{s}")
             }
-            Self::TypeDefinition(s, _) => write!(f, "type {s}"),
+            Self::TermDefinition(s, e) => write!(f, "{s} = {e}"),
+            Self::BuiltInDefinition(s) => write!(f, "{s} = builtin"),
             Self::Declaration(s, p) => write!(f, "{s} : {p}"),
         }
     }
@@ -46,25 +66,17 @@ pub fn parse(tokens: &[Token]) -> Result<Vec<Item>, Vec<Simple<Token>>> {
 
 fn binding_parser() -> impl Parser<Token, Binding, Error = Simple<Token>> + Copy {
     select! {
-        Token::ValueIdent(x) => Binding::Var(x),
+        Token::Ident(x) => Binding::Var(x),
         Token::Discard => Binding::Discard,
     }
 }
 
-fn type_con_parser() -> impl Parser<Token, TypeConstructor, Error = Simple<Token>> + Copy {
-    select! {
-        Token::UnitType => TypeConstructor::Unit,
-        Token::IntType => TypeConstructor::Int,
-        Token::TypeIdent(x) => TypeConstructor::Custom(x),
-    }
-}
-
 fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
-    let def_parser = select! {Token::ValueIdent(x) => x}
+    let term_def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
         .then(expr_parser());
 
-    let def_parser = def_parser.or(select! {Token::ValueIdent(f) => f}
+    let term_def_parser = term_def_parser.or(select! {Token::Ident(f) => f}
         .then(binding_parser())
         .then(binding_parser().repeated())
         .then_ignore(just(Token::Assign))
@@ -82,26 +94,28 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
             (f, e)
         }));
 
-    let builtin_def_parser = select! {Token::ValueIdent(x) => x}
+    let builtin_def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
         .then_ignore(just(Token::BuiltIn));
 
-    let data_con_parser = select! {Token::ValueIdent(x) => x}
-        .then(type_con_parser().repeated())
-        .map(|(name, params)| DataConstructor { name, params });
+    let data_con_parser = select! {Token::Ident(x) => x}
+        .then(type_parser2().repeated())
+        .map(|(name, types)| DataConstructor { name, types });
 
-    let type_def_parser = select! {Token::TypeIdent(x) => x}
+    let type_def_parser = just(Token::TypeDef)
+        .ignore_then(select! {Token::Ident(x) => x})
+        .then(select! {Token::Ident(x) => x}.repeated())
         .then_ignore(just(Token::Assign))
-        .then(data_con_parser.separated_by(just(Token::TypeSum)));
+        .then(data_con_parser.separated_by(just(Token::TypeSum)).at_least(1));
 
-    let dec_parser = select! {Token::ValueIdent(x) => x}
+    let dec_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::OfType))
         .then(type_parser());
 
     let item_parser = choice((
-        def_parser.map(|(name, e)| Item::ValueDefinition(name, e)),
+        type_def_parser.map(|((name, params), cons)| Item::TypeDefinition(name, params, cons)),
+        term_def_parser.map(|(name, e)| Item::TermDefinition(name, e)),
         builtin_def_parser.map(Item::BuiltInDefinition),
-        type_def_parser.map(|(name, cons)| Item::TypeDefinition(name, cons)),
         dec_parser.map(|(name, m)| Item::Declaration(name, m)),
     ));
 
@@ -113,13 +127,24 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
 
 fn type_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
     recursive(|type_parser| {
-        let ident_parser = select! {Token::ValueIdent(x) => MonoType::Var(x.into()) };
+        let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.into()) };
+
+        let type_con_parser = select! {
+            Token::UnitType => MonoType::Con(TypeConstructor::Unit),
+            Token::IntType => MonoType::Con(TypeConstructor::Int),
+        };
 
         let paren_parser = type_parser
             .clone()
             .delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-        let atom = choice((type_con_parser().map(MonoType::Con), ident_parser, paren_parser));
+        let atom = choice((type_con_parser, ident_parser, paren_parser));
+
+        let type_app_parser = select! {Token::Ident(s) => s}
+            .then(atom.clone().repeated().at_least(1))
+            .map(|(name, params)| MonoType::Con(TypeConstructor::Custom(name, params)));
+
+        let atom = type_app_parser.or(atom);
 
         (atom.clone().then_ignore(just(Token::Arrow)).repeated())
             .then(atom)
@@ -127,9 +152,24 @@ fn type_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone 
     })
 }
 
+fn type_parser2() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
+    let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.into()) };
+
+    let type_con_parser = select! {
+        Token::UnitType => MonoType::Con(TypeConstructor::Unit),
+        Token::IntType => MonoType::Con(TypeConstructor::Int),
+    };
+
+    let paren_parser = type_parser()
+        .clone()
+        .delimited_by(just(Token::LeftParen), just(Token::RightParen));
+
+    choice((type_con_parser, ident_parser, paren_parser))
+}
+
 fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clone {
-    recursive(|expr| {
-        let var_parser = select! {Token::ValueIdent(s) => Expression::Var(s)};
+    recursive(|expr_parser| {
+        let var_parser = select! {Token::Ident(s) => Expression::Var(s)};
 
         let literal_parser = select! {
             Token::Unit => Expression::Lit(Literal::Unit),
@@ -139,7 +179,7 @@ fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clon
         let abs_parser = just(Token::Lambda)
             .ignore_then(binding_parser().repeated().at_least(1))
             .then_ignore(just(Token::Arrow))
-            .then(expr.clone())
+            .then(expr_parser.clone())
             .map(|(xs, e)| {
                 xs.into_iter()
                     .rev()
@@ -149,19 +189,19 @@ fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clon
         let let_parser = just(Token::Let)
             .ignore_then(binding_parser())
             .then_ignore(just(Token::Assign))
-            .then(expr.clone())
+            .then(expr_parser.clone())
             .then_ignore(just(Token::In))
-            .then(expr.clone())
+            .then(expr_parser.clone())
             .map(|((b, e1), e2)| Expression::Let(b, Box::new(e1), Box::new(e2)));
 
         let let_parser = let_parser.or(just(Token::Let)
-            .ignore_then(select! {Token::ValueIdent(f) => f})
+            .ignore_then(select! {Token::Ident(f) => f})
             .then(binding_parser())
             .then(binding_parser().repeated())
             .then_ignore(just(Token::Assign))
-            .then(expr.clone())
+            .then(expr_parser.clone())
             .then_ignore(just(Token::In))
-            .then(expr.clone())
+            .then(expr_parser.clone())
             .map(|((((f, b), bs), e1), e2)| {
                 let e1 = bs
                     .into_iter()
@@ -175,7 +215,7 @@ fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clon
                 Expression::Let(f.into(), Box::new(e1), Box::new(e2))
             }));
 
-        let paren_parser = expr.delimited_by(just(Token::LeftParen), just(Token::RightParen));
+        let paren_parser = expr_parser.delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
         let expr1_parser = choice((literal_parser, var_parser, abs_parser, let_parser, paren_parser));
 

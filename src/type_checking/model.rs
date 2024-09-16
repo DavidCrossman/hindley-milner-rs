@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Display, iter};
 
 #[derive(Hash, Clone, PartialEq, Eq, Debug)]
 pub enum TypeVariable {
-    UserDefined(String),
+    Named(String),
     Inferred(usize),
 }
 
@@ -12,7 +12,7 @@ pub enum TypeConstructor {
     Unit,
     Int,
     Function(Box<MonoType>, Box<MonoType>),
-    Custom(String),
+    Custom(String, Vec<MonoType>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -27,10 +27,16 @@ pub struct PolyType {
     pub mono: MonoType,
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum Kind {
+    Type,
+    Arrow(Box<Kind>, Box<Kind>),
+}
+
 impl Display for TypeVariable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UserDefined(s) => s.fmt(f),
+            Self::Named(s) => s.fmt(f),
             Self::Inferred(n) => write!(f, "τ{n}"),
         }
     }
@@ -46,7 +52,21 @@ impl Display for TypeConstructor {
                 MonoType::Con(Function(..)) => write!(f, "({l}) → {r}"),
                 MonoType::Var(_) | MonoType::Con(_) => write!(f, "{l} → {r}"),
             },
-            Custom(s) => s.fmt(f),
+            Custom(s, params) => {
+                if params.is_empty() {
+                    return write!(f, "{s}");
+                }
+                let params = (params.iter())
+                    .map(|m| match m {
+                        MonoType::Con(Function(..)) => format!("({m})"),
+                        MonoType::Con(Custom(_, params)) if !params.is_empty() => {
+                            format!("({m})")
+                        }
+                        _ => m.to_string(),
+                    })
+                    .collect::<Vec<_>>();
+                write!(f, "{s} {}", params.join(" "))
+            }
         }
     }
 }
@@ -69,9 +89,21 @@ impl Display for PolyType {
     }
 }
 
+impl Display for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Type => "Type".fmt(f),
+            Self::Arrow(l, r) => match **l {
+                Self::Type => write!(f, "{l} → {r}"),
+                Self::Arrow(..) => write!(f, "({l}) → {r}"),
+            },
+        }
+    }
+}
+
 impl From<String> for TypeVariable {
     fn from(value: String) -> Self {
-        Self::UserDefined(value)
+        Self::Named(value)
     }
 }
 
@@ -107,11 +139,12 @@ impl MonoType {
         use TypeConstructor::*;
         f(self);
         match self {
-            Self::Var(_) | Self::Con(Unit | Int | Custom(_)) => {}
+            Self::Var(_) | Self::Con(Unit | Int) => {}
             Self::Con(Function(l, r)) => {
                 l.traverse(f);
                 r.traverse(f);
             }
+            Self::Con(Custom(_, params)) => params.iter_mut().for_each(|m| m.traverse(f)),
         }
     }
 
@@ -119,8 +152,9 @@ impl MonoType {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Int | Custom(_)) => Box::new(iter::empty()),
+            Self::Con(Unit | Int) => Box::new(iter::empty()),
             Self::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
+            Self::Con(Custom(_, params)) => Box::new(params.iter().flat_map(Self::vars)),
         };
         iter
     }
@@ -129,8 +163,9 @@ impl MonoType {
         use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Int | Custom(_)) => Box::new(iter::empty()),
+            Self::Con(Unit | Int) => Box::new(iter::empty()),
             Self::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
+            Self::Con(Custom(_, params)) => Box::new(params.iter_mut().flat_map(Self::vars_mut)),
         };
         iter
     }
@@ -145,6 +180,13 @@ impl MonoType {
 }
 
 impl PolyType {
+    pub fn new(mono: impl Into<MonoType>, quantifiers: impl IntoIterator<Item: Into<TypeVariable>>) -> Self {
+        Self {
+            quantifiers: quantifiers.into_iter().map(Into::into).collect(),
+            mono: mono.into(),
+        }
+    }
+
     pub fn instantiate(mut self, next_fresh: usize) -> (MonoType, usize) {
         let n = next_fresh + self.quantifiers.len();
         let mappings = (self.quantifiers.into_iter())

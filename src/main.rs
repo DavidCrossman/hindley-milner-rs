@@ -10,8 +10,8 @@ pub mod type_checking;
 
 fn main() {
     let source = r"
-        Nat = zero + succ Nat
-        main = succ (succ zero)
+        type List a = nil + cons a (List a)
+        main = cons 3 (cons 2 nil)
     ";
     match lexer::lex(source) {
         Ok(tokens) => match parser::parse(&tokens) {
