@@ -13,8 +13,6 @@ pub enum Token {
     BuiltIn,
     TypeDef,
     TypeSum,
-    UnitType,
-    IntType,
     Unit,
     Int(i64),
     Ident(String),
@@ -37,15 +35,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
             if tokens.last().is_some_and(|t| {
                 matches!(
                     t,
-                    BuiltIn
-                        | TypeSum
-                        | UnitType
-                        | IntType
-                        | Ident(_)
-                        | Unit
-                        | Int(_)
-                        | LeftParen
-                        | RightParen
+                    BuiltIn | TypeSum | Ident(_) | Unit | Int(_) | LeftParen | RightParen
                 )
             }) {
                 tokens.push(Token::Separator);
@@ -65,8 +55,6 @@ fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone 
         text::keyword("in").to(Token::In),
         text::keyword("builtin").to(Token::BuiltIn),
         text::keyword("type").to(Token::TypeDef),
-        text::keyword("Unit").to(Token::UnitType),
-        text::keyword("Int").to(Token::IntType),
         just("()").to(Token::Unit),
         one_of("λ\\").to(Token::Lambda),
         just("->").or(just("→")).to(Token::Arrow),

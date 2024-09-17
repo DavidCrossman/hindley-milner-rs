@@ -9,10 +9,8 @@ pub enum TypeVariable {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum TypeConstructor {
-    Unit,
-    Int,
     Function,
-    Custom(String),
+    Named(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -46,10 +44,8 @@ impl Display for TypeVariable {
 impl Display for TypeConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unit => "Unit".fmt(f),
-            Self::Int => "Int".fmt(f),
             Self::Function => "→".fmt(f),
-            Self::Custom(s) => s.fmt(f),
+            Self::Named(s) => s.fmt(f),
         }
     }
 }
@@ -145,7 +141,7 @@ impl From<usize> for TypeVariable {
 
 impl From<String> for TypeConstructor {
     fn from(value: String) -> Self {
-        Self::Custom(value)
+        Self::Named(value)
     }
 }
 

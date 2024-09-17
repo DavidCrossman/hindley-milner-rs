@@ -12,8 +12,8 @@ pub fn w(
         Expression::Lit(lit) => Ok((
             Substitution::new(),
             MonoType::Con(match lit {
-                Literal::Unit => TypeConstructor::Unit,
-                Literal::Int(_) => TypeConstructor::Int,
+                Literal::Unit => TypeConstructor::Named("Unit".to_owned()),
+                Literal::Int(_) => TypeConstructor::Named("Int".to_owned()),
             }),
             n,
         )),
@@ -69,8 +69,8 @@ pub fn m(
         Expression::Lit(lit) => unify(
             t,
             MonoType::Con(match lit {
-                Literal::Unit => TypeConstructor::Unit,
-                Literal::Int(_) => TypeConstructor::Int,
+                Literal::Unit => TypeConstructor::Named("Unit".to_owned()),
+                Literal::Int(_) => TypeConstructor::Named("Int".to_owned()),
             }),
         )
         .map(|s| (s, n)),

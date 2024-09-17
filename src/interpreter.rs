@@ -10,7 +10,7 @@ pub enum Value {
     Closure(Binding, Expression, Environment<Value>),
     FixClosure(String, Binding, Expression, Environment<Value>),
     BuiltIn(BuiltInFn),
-    Custom(String, Vec<Value>),
+    Data(String, Vec<Value>),
 }
 
 #[derive(Debug, Clone)]
@@ -48,7 +48,7 @@ impl Display for Value {
             Self::Closure(b, e, env) => write!(f, "λ{env} {b} → {e}"),
             Self::FixClosure(x, b, e, env) => write!(f, "fix {x} λ{env} {b} → {e}"),
             Self::BuiltIn(fun) => fun.fmt(f),
-            Self::Custom(name, values) => {
+            Self::Data(name, values) => {
                 let values = values.iter().map(ToString::to_string).collect::<Vec<_>>();
                 write!(f, "{name} ⟨{}⟩", values.join(","))
             }

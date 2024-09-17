@@ -44,6 +44,8 @@ impl Program {
         let mut declarations = Environment::new();
         let mut type_constructors = Environment::new();
         let mut built_ins = Environment::new();
+        type_constructors += ("Unit".to_owned(), Kind::Type);
+        type_constructors += ("Int".to_owned(), Kind::Type);
         for item in items {
             match item {
                 Item::TermDefinition(name, expr) => {
@@ -78,7 +80,7 @@ impl Program {
                         let mut mono = mono.clone();
                         let c;
                         if types.is_empty() {
-                            c = Control::Val(Value::Custom(name.clone(), Vec::new()));
+                            c = Control::Val(Value::Data(name.clone(), Vec::new()));
                         } else {
                             let arity = types.len();
                             mono = types

@@ -81,7 +81,7 @@ impl BuiltInFn {
             let mut values = values.clone();
             values.push(v);
             if values.len() >= arity {
-                Ok(Value::Custom(name.clone(), values))
+                Ok(Value::Data(name.clone(), values))
             } else {
                 Ok(Value::BuiltIn(Self::make_data_impl(name.clone(), arity, values)))
             }
