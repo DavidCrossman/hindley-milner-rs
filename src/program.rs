@@ -6,6 +6,7 @@ use crate::interpreter::{self, Control, Value};
 use crate::parser::{self, DataConstructor, Item};
 use crate::type_checking::model::{Kind, MonoType, PolyType, TypeVariable};
 use crate::type_checking::{self, substitution::Substitute};
+use std::collections::HashSet;
 use thiserror::Error;
 
 #[derive(Clone)]
@@ -33,6 +34,8 @@ pub enum ProgramError {
     DuplicateSignature(String),
     #[error("unknown type variable '{0}'")]
     UnknownTypeVar(TypeVariable),
+    #[error("unused type variable '{0}'")]
+    UnusedTypeVar(TypeVariable),
 }
 
 pub type Result<T> = std::result::Result<T, ProgramError>;
@@ -69,12 +72,20 @@ impl Program {
                     };
                     built_ins += (name, fun);
                 }
-                Item::TypeDefinition(type_name, params, sum) => {
-                    let kind = (0..params.len())
+                Item::TypeDefinition(type_name, vars, sum) => {
+                    let used_vars = (sum.iter())
+                        .flat_map(|con| con.types.iter())
+                        .fold(HashSet::new(), |vars, m| {
+                            vars.union(&m.free_vars()).copied().collect()
+                        });
+                    if let Some(&v) = HashSet::from_iter(&vars).difference(&used_vars).next() {
+                        return Err(ProgramError::UnusedTypeVar(v.clone()));
+                    };
+                    let kind = (0..vars.len())
                         .fold(Kind::Type, |k, _| Kind::Arrow(Box::new(Kind::Type), Box::new(k)));
                     type_constructors += (type_name.clone(), kind);
-                    let mono = (params.iter()).fold(MonoType::Con(type_name.clone().into()), |m, s| {
-                        MonoType::App(Box::new(m), Box::new(MonoType::Var(s.clone().into())))
+                    let mono = (vars.iter()).fold(MonoType::Con(type_name.clone().into()), |m, s| {
+                        MonoType::App(Box::new(m), Box::new(MonoType::Var(s.clone())))
                     });
                     for DataConstructor { name, types } in sum {
                         let mut mono = mono.clone();
@@ -97,7 +108,7 @@ impl Program {
                             let fun = BuiltInFn::make_data_constructor(name.clone(), arity);
                             c = Control::Val(Value::BuiltIn(fun));
                         }
-                        let p = PolyType::new(mono, params.clone());
+                        let p = PolyType::new(mono, vars.clone());
                         if let Some(&t) = p.free_vars().iter().next() {
                             return Err(ProgramError::UnknownTypeVar(t.clone()));
                         }

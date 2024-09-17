@@ -1,5 +1,5 @@
 use crate::expression::{Binding, Expression, Literal};
-use crate::type_checking::model::{MonoType, TypeConstructor};
+use crate::type_checking::model::{MonoType, TypeVariable};
 use crate::{free_variable::FreeVariable, lexer::Token};
 use chumsky::prelude::*;
 use std::fmt::Display;
@@ -12,7 +12,7 @@ pub struct DataConstructor {
 
 #[derive(Clone, Debug)]
 pub enum Item {
-    TypeDefinition(String, Vec<String>, Vec<DataConstructor>),
+    TypeDefinition(String, Vec<TypeVariable>, Vec<DataConstructor>),
     TermDefinition(String, Expression),
     BuiltInDefinition(String),
     Declaration(String, MonoType),
@@ -102,7 +102,7 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
 
     let type_def_parser = just(Token::TypeDef)
         .ignore_then(select! {Token::Ident(x) => x})
-        .then(select! {Token::Ident(x) => x}.repeated())
+        .then(select! {Token::Ident(x) => x}.map(TypeVariable::Named).repeated())
         .then_ignore(just(Token::Assign))
         .then(data_con_parser.separated_by(just(Token::TypeSum)).at_least(1));
 
@@ -111,7 +111,7 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
         .then(type_parser());
 
     let item_parser = choice((
-        type_def_parser.map(|((name, params), cons)| Item::TypeDefinition(name, params, cons)),
+        type_def_parser.map(|((name, vars), cons)| Item::TypeDefinition(name, vars, cons)),
         term_def_parser.map(|(name, e)| Item::TermDefinition(name, e)),
         builtin_def_parser.map(Item::BuiltInDefinition),
         dec_parser.map(|(name, m)| Item::Declaration(name, m)),
