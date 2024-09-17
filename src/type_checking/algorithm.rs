@@ -28,10 +28,7 @@ pub fn w(
             let (s1, m1, n) = w(env, e1, n)?;
             let (s2, m2, n) = w(&env.clone().substitute(&s1), e2, n)?;
             let beta = MonoType::Var(n.into());
-            let s3 = unify(
-                TypeConstructor::Function(Box::new(m2), Box::new(beta.clone())).into(),
-                m1.substitute(&s2),
-            )?;
+            let s3 = unify(MonoType::function(m2, beta.clone()), m1.substitute(&s2))?;
             Ok((s1.combine(&s2.combine(&s3)), beta.substitute(&s3), n + 1))
         }
         Expression::Abs(b, e) => {
@@ -41,8 +38,7 @@ pub fn w(
                 Binding::Discard => env,
             };
             let (s, m, n) = w(env, e, n + 1)?;
-            let m = MonoType::Con(TypeConstructor::Function(Box::new(beta), Box::new(m)));
-            Ok((s.clone(), m.substitute(&s), n))
+            Ok((s.clone(), MonoType::function(beta, m).substitute(&s), n))
         }
         Expression::Let(b, e1, e2) => {
             let (s1, m1, n) = w(env, e1, n)?;
@@ -87,16 +83,14 @@ pub fn m(
         },
         Expression::App(e1, e2) => {
             let beta = MonoType::Var(n.into());
-            let t = TypeConstructor::Function(Box::new(beta.clone()), Box::new(t));
-            let (s1, n) = m(env, e1, t.into(), n + 1)?;
+            let (s1, n) = m(env, e1, MonoType::function(beta.clone(), t), n + 1)?;
             let (s2, n) = m(&env.clone().substitute(&s1), e2, beta.substitute(&s1), n)?;
             Ok((s1.combine(&s2), n))
         }
         Expression::Abs(b, e) => {
             let beta1 = MonoType::Var(n.into());
             let beta2 = MonoType::Var((n + 1).into());
-            let t2 = TypeConstructor::Function(Box::new(beta1.clone()), Box::new(beta2.clone())).into();
-            let s1 = unify(t, t2)?;
+            let s1 = unify(t, MonoType::function(beta1.clone(), beta2.clone()))?;
             let mut env = env.clone().substitute(&s1);
             if let Binding::Var(x) = b {
                 env += (x.clone(), beta1.substitute(&s1).into());

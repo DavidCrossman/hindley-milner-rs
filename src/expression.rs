@@ -46,16 +46,16 @@ impl Display for Expression {
         match self {
             Lit(lit) => lit.fmt(f),
             Var(x) => x.fmt(f),
-            App(e1, e2) => match **e1 {
-                Lit(_) | Var(_) => match **e2 {
+            App(e1, e2) => match e1.as_ref() {
+                Lit(_) | Var(_) => match e2.as_ref() {
                     Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
                     App(..) | Abs(..) | Let(..) | Fix(..) => write!(f, "{e1} ({e2})"),
                 },
-                Abs(..) | Let(..) | Fix(..) => match **e2 {
+                Abs(..) | Let(..) | Fix(..) => match e2.as_ref() {
                     Lit(_) | Var(_) | Abs(..) | Let(..) | Fix(..) => write!(f, "({e1}) {e2}"),
                     App(..) => write!(f, "({e1}) ({e2})"),
                 },
-                App(..) => match **e2 {
+                App(..) => match e2.as_ref() {
                     Lit(_) | Var(_) => write!(f, "{e1} {e2}"),
                     App(..) | Abs(..) | Let(..) | Fix(..) => write!(f, "{e1} ({e2})"),
                 },

@@ -11,14 +11,15 @@ pub enum TypeVariable {
 pub enum TypeConstructor {
     Unit,
     Int,
-    Function(Box<MonoType>, Box<MonoType>),
-    Custom(String, Vec<MonoType>),
+    Function,
+    Custom(String),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum MonoType {
     Var(TypeVariable),
     Con(TypeConstructor),
+    App(Box<MonoType>, Box<MonoType>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -44,39 +45,68 @@ impl Display for TypeVariable {
 
 impl Display for TypeConstructor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use TypeConstructor::*;
         match self {
-            Unit => "Unit".fmt(f),
-            Int => "Int".fmt(f),
-            Function(l, r) => match **l {
-                MonoType::Con(Function(..)) => write!(f, "({l}) → {r}"),
-                MonoType::Var(_) | MonoType::Con(_) => write!(f, "{l} → {r}"),
-            },
-            Custom(s, params) => {
-                if params.is_empty() {
-                    return write!(f, "{s}");
+            Self::Unit => "Unit".fmt(f),
+            Self::Int => "Int".fmt(f),
+            Self::Function => "→".fmt(f),
+            Self::Custom(s) => s.fmt(f),
+        }
+    }
+}
+
+enum DisplayMonoType {
+    Name(String),
+    PartialFunc(Box<DisplayMonoType>),
+    Func(Box<DisplayMonoType>, Box<DisplayMonoType>),
+    App(Box<DisplayMonoType>, Box<DisplayMonoType>),
+}
+
+impl DisplayMonoType {
+    fn make(m: &MonoType) -> Self {
+        use MonoType::*;
+        match m {
+            Var(v) => Self::Name(v.to_string()),
+            Con(con @ TypeConstructor::Function) => Self::Name(format!("({con})")),
+            Con(con) => Self::Name(con.to_string()),
+            App(m1, m2) => match m1.as_ref() {
+                App(f, m1) if matches!(**f, Con(TypeConstructor::Function)) => {
+                    Self::Func(Box::new(Self::make(m1)), Box::new(Self::make(m2)))
                 }
-                let params = (params.iter())
-                    .map(|m| match m {
-                        MonoType::Con(Function(..)) => format!("({m})"),
-                        MonoType::Con(Custom(_, params)) if !params.is_empty() => {
-                            format!("({m})")
-                        }
-                        _ => m.to_string(),
-                    })
-                    .collect::<Vec<_>>();
-                write!(f, "{s} {}", params.join(" "))
-            }
+                Con(TypeConstructor::Function) => Self::PartialFunc(Box::new(Self::make(m2))),
+                _ => Self::App(Box::new(Self::make(m1)), Box::new(Self::make(m2))),
+            },
+        }
+    }
+}
+
+impl Display for DisplayMonoType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Name(s) => s.fmt(f),
+            Self::PartialFunc(m) => write!(f, "({m} {})", TypeConstructor::Function),
+            Self::Func(l, r) => match l.as_ref() {
+                Self::Name(_) | Self::App(..) | Self::PartialFunc(_) => {
+                    write!(f, "{l} {} {r}", TypeConstructor::Function)
+                }
+                Self::Func(..) => write!(f, "({l}) {} {r}", TypeConstructor::Function),
+            },
+            Self::App(m1, m2) => match m1.as_ref() {
+                Self::Func(..) => match m2.as_ref() {
+                    Self::Name(_) => write!(f, "({m1}) {m2}"),
+                    Self::Func(..) | Self::App(..) | Self::PartialFunc(_) => write!(f, "({m1}) ({m2})"),
+                },
+                Self::Name(_) | Self::App(..) | Self::PartialFunc(_) => match m2.as_ref() {
+                    Self::Name(_) => write!(f, "{m1} {m2}"),
+                    Self::Func(..) | Self::App(..) | Self::PartialFunc(_) => write!(f, "{m1} ({m2})"),
+                },
+            },
         }
     }
 }
 
 impl Display for MonoType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Var(t) => t.fmt(f),
-            Self::Con(c) => c.fmt(f),
-        }
+        DisplayMonoType::make(self).fmt(f)
     }
 }
 
@@ -113,6 +143,12 @@ impl From<usize> for TypeVariable {
     }
 }
 
+impl From<String> for TypeConstructor {
+    fn from(value: String) -> Self {
+        Self::Custom(value)
+    }
+}
+
 impl From<TypeVariable> for MonoType {
     fn from(value: TypeVariable) -> Self {
         Self::Var(value)
@@ -135,37 +171,41 @@ impl From<MonoType> for PolyType {
 }
 
 impl MonoType {
+    pub fn function(m1: impl Into<Self>, m2: impl Into<Self>) -> Self {
+        Self::App(
+            Box::new(Self::App(
+                Box::new(Self::Con(TypeConstructor::Function)),
+                Box::new(m1.into()),
+            )),
+            Box::new(m2.into()),
+        )
+    }
+
     pub fn traverse(&mut self, f: &mut impl FnMut(&mut Self)) {
-        use TypeConstructor::*;
         f(self);
         match self {
-            Self::Var(_) | Self::Con(Unit | Int) => {}
-            Self::Con(Function(l, r)) => {
-                l.traverse(f);
-                r.traverse(f);
+            Self::Var(_) | Self::Con(_) => {}
+            Self::App(m1, m2) => {
+                m1.traverse(f);
+                m2.traverse(f);
             }
-            Self::Con(Custom(_, params)) => params.iter_mut().for_each(|m| m.traverse(f)),
         }
     }
 
     pub fn vars(&self) -> impl Iterator<Item = &TypeVariable> {
-        use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Int) => Box::new(iter::empty()),
-            Self::Con(Function(l, r)) => Box::new(l.vars().chain(r.vars())),
-            Self::Con(Custom(_, params)) => Box::new(params.iter().flat_map(Self::vars)),
+            Self::Con(_) => Box::new(iter::empty()),
+            Self::App(m1, m2) => Box::new(m1.vars().chain(m2.vars())),
         };
         iter
     }
 
     pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut TypeVariable> {
-        use TypeConstructor::*;
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
-            Self::Con(Unit | Int) => Box::new(iter::empty()),
-            Self::Con(Function(l, r)) => Box::new(l.vars_mut().chain(r.vars_mut())),
-            Self::Con(Custom(_, params)) => Box::new(params.iter_mut().flat_map(Self::vars_mut)),
+            Self::Con(_) => Box::new(iter::empty()),
+            Self::App(m1, m2) => Box::new(m1.vars_mut().chain(m2.vars_mut())),
         };
         iter
     }

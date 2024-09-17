@@ -4,7 +4,7 @@ use crate::expression::Expression;
 use crate::free_variable::FreeVariable;
 use crate::interpreter::{self, Control, Value};
 use crate::parser::{self, DataConstructor, Item};
-use crate::type_checking::model::{Kind, MonoType, PolyType, TypeConstructor, TypeVariable};
+use crate::type_checking::model::{Kind, MonoType, PolyType, TypeVariable};
 use crate::type_checking::{self, substitution::Substitute};
 use thiserror::Error;
 
@@ -71,24 +71,24 @@ impl Program {
                     let kind = (0..params.len())
                         .fold(Kind::Type, |k, _| Kind::Arrow(Box::new(Kind::Type), Box::new(k)));
                     type_constructors += (type_name.clone(), kind);
-                    let con_type = MonoType::Con(TypeConstructor::Custom(
-                        type_name.clone(),
-                        params.iter().map(|p| MonoType::Var(p.clone().into())).collect(),
-                    ));
+                    let mono = (params.iter()).fold(MonoType::Con(type_name.clone().into()), |m, s| {
+                        MonoType::App(Box::new(m), Box::new(MonoType::Var(s.clone().into())))
+                    });
                     for DataConstructor { name, types } in sum {
-                        let mut mono = con_type.clone();
+                        let mut mono = mono.clone();
                         let c;
                         if types.is_empty() {
                             c = Control::Val(Value::Custom(name.clone(), Vec::new()));
                         } else {
                             let arity = types.len();
-                            mono = types.into_iter().rev().fold(mono, |m1, m2| {
-                                TypeConstructor::Function(Box::new(m2), Box::new(m1)).into()
-                            });
+                            mono = types
+                                .into_iter()
+                                .rev()
+                                .fold(mono, |m1, m2| MonoType::function(m2, m1));
                             mono.traverse(&mut |m| {
                                 if let MonoType::Var(TypeVariable::Named(name)) = &m {
                                     if type_constructors.contains_name(name) {
-                                        *m = MonoType::Con(TypeConstructor::Custom(name.clone(), Vec::new()));
+                                        *m = MonoType::Con(name.clone().into());
                                     }
                                 }
                             });
@@ -116,7 +116,7 @@ impl Program {
                     m.traverse(&mut |m| {
                         if let MonoType::Var(TypeVariable::Named(name)) = &m {
                             if type_constructors.contains_name(name) {
-                                *m = MonoType::Con(TypeConstructor::Custom(name.clone(), Vec::new()));
+                                *m = MonoType::Con(name.clone().into());
                             }
                         }
                     });
@@ -154,7 +154,7 @@ impl Program {
                     None => (MonoType::Var(0.into()), 1),
                 };
                 let (s, _) = type_checking::algorithm::m(&env, expr, t.clone(), n)?;
-                let p = t.substitute(&s).generalise(&env).requantify();
+                let p = t.substitute(&s).generalise(&env);
                 Ok(env + (name.clone(), p))
             })
     }

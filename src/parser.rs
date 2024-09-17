@@ -27,9 +27,7 @@ impl Display for DataConstructor {
                 .types
                 .iter()
                 .map(|m| match m {
-                    MonoType::Con(TypeConstructor::Custom(..) | TypeConstructor::Function(..)) => {
-                        format!("({m})")
-                    }
+                    MonoType::App(..) => format!("({m})"),
                     MonoType::Var(_) | MonoType::Con(_) => m.to_string(),
                 })
                 .collect::<Vec<_>>();
@@ -99,7 +97,7 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
         .then_ignore(just(Token::BuiltIn));
 
     let data_con_parser = select! {Token::Ident(x) => x}
-        .then(type_parser2().repeated())
+        .then(type_atom_parser().repeated())
         .map(|(name, types)| DataConstructor { name, types });
 
     let type_def_parser = just(Token::TypeDef)
@@ -126,33 +124,20 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
 }
 
 fn type_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
-    recursive(|type_parser| {
-        let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.into()) };
-
-        let type_con_parser = select! {
-            Token::UnitType => MonoType::Con(TypeConstructor::Unit),
-            Token::IntType => MonoType::Con(TypeConstructor::Int),
-        };
-
-        let paren_parser = type_parser
-            .clone()
-            .delimited_by(just(Token::LeftParen), just(Token::RightParen));
-
-        let atom = choice((type_con_parser, ident_parser, paren_parser));
-
-        let type_app_parser = select! {Token::Ident(s) => s}
-            .then(atom.clone().repeated().at_least(1))
-            .map(|(name, params)| MonoType::Con(TypeConstructor::Custom(name, params)));
-
-        let atom = type_app_parser.or(atom);
-
-        (atom.clone().then_ignore(just(Token::Arrow)).repeated())
-            .then(atom)
-            .foldr(|a, b| MonoType::Con(TypeConstructor::Function(Box::new(a), Box::new(b))))
-    })
+    create_type_parsers().1
 }
 
-fn type_parser2() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
+fn type_atom_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
+    create_type_parsers().0
+}
+
+fn create_type_parsers() -> (
+    impl Parser<Token, MonoType, Error = Simple<Token>> + Clone,
+    impl Parser<Token, MonoType, Error = Simple<Token>> + Clone,
+) {
+    let mut atom = Recursive::declare();
+    let mut type_parser = Recursive::declare();
+
     let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.into()) };
 
     let type_con_parser = select! {
@@ -160,11 +145,20 @@ fn type_parser2() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone
         Token::IntType => MonoType::Con(TypeConstructor::Int),
     };
 
-    let paren_parser = type_parser()
-        .clone()
-        .delimited_by(just(Token::LeftParen), just(Token::RightParen));
+    let paren_parser = (type_parser.clone()).delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-    choice((type_con_parser, ident_parser, paren_parser))
+    let app_parser = (atom.clone().then(atom.clone().repeated()))
+        .foldl(|m1, m2| MonoType::App(Box::new(m1), Box::new(m2)));
+
+    atom.define(choice((type_con_parser, ident_parser, paren_parser)));
+
+    type_parser.define(
+        (app_parser.clone().then_ignore(just(Token::Arrow)).repeated())
+            .then(app_parser)
+            .foldr(MonoType::function),
+    );
+
+    (atom, type_parser)
 }
 
 fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clone {
