@@ -1,5 +1,5 @@
 use crate::expression::{Binding, Expression, Literal};
-use crate::type_checking::model::{MonoType, TypeVariable};
+use crate::type_checking::model::{MonoType, Variable};
 use crate::{free_variable::FreeVariable, lexer::Token};
 use chumsky::prelude::*;
 use std::fmt::Display;
@@ -12,7 +12,7 @@ pub struct DataConstructor {
 
 #[derive(Clone, Debug)]
 pub enum Item {
-    TypeDefinition(String, Vec<TypeVariable>, Vec<DataConstructor>),
+    TypeDefinition(String, Vec<Variable>, Vec<DataConstructor>),
     TermDefinition(String, Expression),
     BuiltInDefinition(String),
     Declaration(String, MonoType),
@@ -102,7 +102,7 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
 
     let type_def_parser = just(Token::TypeDef)
         .ignore_then(select! {Token::Ident(x) => x})
-        .then(select! {Token::Ident(x) => x}.map(TypeVariable::Named).repeated())
+        .then(select! {Token::Ident(x) => x}.map(Variable::Named).repeated())
         .then_ignore(just(Token::Assign))
         .then(data_con_parser.separated_by(just(Token::TypeSum)).at_least(1));
 

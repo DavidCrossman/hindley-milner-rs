@@ -1,11 +1,11 @@
-use super::model::{MonoType, PolyType, TypeVariable};
+use super::model::{MonoType, PolyType, Variable};
 use crate::environment::Environment;
 use std::collections::{hash_map, HashMap};
 use std::fmt::Display;
 
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub struct Substitution {
-    map: HashMap<TypeVariable, MonoType>,
+    map: HashMap<Variable, MonoType>,
 }
 
 pub trait Substitute {
@@ -21,16 +21,16 @@ pub trait Substitute {
 }
 
 impl IntoIterator for Substitution {
-    type Item = (TypeVariable, MonoType);
-    type IntoIter = hash_map::IntoIter<TypeVariable, MonoType>;
+    type Item = (Variable, MonoType);
+    type IntoIter = hash_map::IntoIter<Variable, MonoType>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.into_iter()
     }
 }
 
-impl FromIterator<(TypeVariable, MonoType)> for Substitution {
-    fn from_iter<T: IntoIterator<Item = (TypeVariable, MonoType)>>(iter: T) -> Self {
+impl FromIterator<(Variable, MonoType)> for Substitution {
+    fn from_iter<T: IntoIterator<Item = (Variable, MonoType)>>(iter: T) -> Self {
         Self {
             map: HashMap::from_iter(iter),
         }
@@ -51,7 +51,7 @@ impl Substitution {
         Self { map: HashMap::new() }
     }
 
-    pub fn iter(&self) -> hash_map::Iter<'_, TypeVariable, MonoType> {
+    pub fn iter(&self) -> hash_map::Iter<'_, Variable, MonoType> {
         self.map.iter()
     }
 

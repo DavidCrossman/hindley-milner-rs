@@ -4,7 +4,7 @@ use crate::expression::Expression;
 use crate::free_variable::FreeVariable;
 use crate::interpreter::{self, Control, Value};
 use crate::parser::{self, DataConstructor, Item};
-use crate::type_checking::model::{Kind, MonoType, PolyType, TypeVariable};
+use crate::type_checking::model::{Kind, MonoType, PolyType, Variable};
 use crate::type_checking::{self, substitution::Substitute};
 use std::collections::HashSet;
 use thiserror::Error;
@@ -33,9 +33,9 @@ pub enum ProgramError {
     #[error("duplicate type signatures for '{0}'")]
     DuplicateSignature(String),
     #[error("unknown type variable '{0}'")]
-    UnknownTypeVar(TypeVariable),
+    UnknownTypeVar(Variable),
     #[error("unused type variable '{0}'")]
-    UnusedTypeVar(TypeVariable),
+    UnusedTypeVar(Variable),
 }
 
 pub type Result<T> = std::result::Result<T, ProgramError>;
@@ -94,12 +94,9 @@ impl Program {
                             c = Control::Val(Value::Data(name.clone(), Vec::new()));
                         } else {
                             let arity = types.len();
-                            mono = types
-                                .into_iter()
-                                .rev()
-                                .fold(mono, |m1, m2| MonoType::function(m2, m1));
+                            mono = (types.into_iter().rev()).fold(mono, |m1, m2| MonoType::function(m2, m1));
                             mono.traverse(&mut |m| {
-                                if let MonoType::Var(TypeVariable::Named(name)) = &m {
+                                if let MonoType::Var(Variable::Named(name)) = &m {
                                     if type_constructors.contains_name(name) {
                                         *m = MonoType::Con(name.clone().into());
                                     }
@@ -127,7 +124,7 @@ impl Program {
                         return Err(ProgramError::DuplicateSignature(name));
                     }
                     m.traverse(&mut |m| {
-                        if let MonoType::Var(TypeVariable::Named(name)) = &m {
+                        if let MonoType::Var(Variable::Named(name)) = &m {
                             if type_constructors.contains_name(name) {
                                 *m = MonoType::Con(name.clone().into());
                             }

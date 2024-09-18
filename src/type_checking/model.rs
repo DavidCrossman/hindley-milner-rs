@@ -2,7 +2,7 @@ use crate::{environment::Environment, free_variable::FreeVariable};
 use std::{collections::HashMap, fmt::Display, iter};
 
 #[derive(Hash, Clone, PartialEq, Eq, Debug)]
-pub enum TypeVariable {
+pub enum Variable {
     Named(String),
     Inferred(usize),
 }
@@ -15,24 +15,25 @@ pub enum TypeConstructor {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum MonoType {
-    Var(TypeVariable),
+    Var(Variable),
     Con(TypeConstructor),
     App(Box<MonoType>, Box<MonoType>),
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PolyType {
-    pub quantifiers: Vec<TypeVariable>,
+    pub quantifiers: Vec<Variable>,
     pub mono: MonoType,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Kind {
     Type,
+    Var(Variable),
     Arrow(Box<Kind>, Box<Kind>),
 }
 
-impl Display for TypeVariable {
+impl Display for Variable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Named(s) => s.fmt(f),
@@ -119,21 +120,22 @@ impl Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Type => "Type".fmt(f),
-            Self::Arrow(l, r) => match **l {
-                Self::Type => write!(f, "{l} → {r}"),
+            Self::Var(v) => v.fmt(f),
+            Self::Arrow(l, r) => match l.as_ref() {
+                Self::Type | Self::Var(_) => write!(f, "{l} → {r}"),
                 Self::Arrow(..) => write!(f, "({l}) → {r}"),
             },
         }
     }
 }
 
-impl From<String> for TypeVariable {
+impl From<String> for Variable {
     fn from(value: String) -> Self {
         Self::Named(value)
     }
 }
 
-impl From<usize> for TypeVariable {
+impl From<usize> for Variable {
     fn from(value: usize) -> Self {
         Self::Inferred(value)
     }
@@ -145,8 +147,14 @@ impl From<String> for TypeConstructor {
     }
 }
 
-impl From<TypeVariable> for MonoType {
-    fn from(value: TypeVariable) -> Self {
+impl From<Variable> for MonoType {
+    fn from(value: Variable) -> Self {
+        Self::Var(value)
+    }
+}
+
+impl From<Variable> for Kind {
+    fn from(value: Variable) -> Self {
         Self::Var(value)
     }
 }
@@ -188,7 +196,7 @@ impl MonoType {
         }
     }
 
-    pub fn vars(&self) -> impl Iterator<Item = &TypeVariable> {
+    pub fn vars(&self) -> impl Iterator<Item = &Variable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
             Self::Con(_) => Box::new(iter::empty()),
@@ -197,7 +205,7 @@ impl MonoType {
         iter
     }
 
-    pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut TypeVariable> {
+    pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut Variable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(t) => Box::new(iter::once(t)),
             Self::Con(_) => Box::new(iter::empty()),
@@ -216,7 +224,7 @@ impl MonoType {
 }
 
 impl PolyType {
-    pub fn new(mono: impl Into<MonoType>, quantifiers: impl IntoIterator<Item: Into<TypeVariable>>) -> Self {
+    pub fn new(mono: impl Into<MonoType>, quantifiers: impl IntoIterator<Item: Into<Variable>>) -> Self {
         Self {
             quantifiers: quantifiers.into_iter().map(Into::into).collect(),
             mono: mono.into(),
@@ -226,7 +234,7 @@ impl PolyType {
     pub fn instantiate(mut self, next_fresh: usize) -> (MonoType, usize) {
         let n = next_fresh + self.quantifiers.len();
         let mappings = (self.quantifiers.into_iter())
-            .zip((next_fresh..).map(TypeVariable::Inferred))
+            .zip((next_fresh..).map(Variable::Inferred))
             .collect::<HashMap<_, _>>();
         self.mono.vars_mut().for_each(|t1| {
             if let Some(t2) = mappings.get(t1) {

@@ -1,20 +1,20 @@
 use crate::environment::Environment;
 use crate::expression::{Binding, Expression};
-use crate::type_checking::model::{MonoType, PolyType, TypeVariable};
+use crate::type_checking::model::{MonoType, PolyType, Variable};
 use std::collections::HashSet;
 
 pub trait FreeVariable<V> {
     fn free_vars(&self) -> HashSet<&V>;
 }
 
-impl FreeVariable<TypeVariable> for MonoType {
-    fn free_vars(&self) -> HashSet<&TypeVariable> {
+impl FreeVariable<Variable> for MonoType {
+    fn free_vars(&self) -> HashSet<&Variable> {
         self.vars().collect()
     }
 }
 
-impl FreeVariable<TypeVariable> for PolyType {
-    fn free_vars(&self) -> HashSet<&TypeVariable> {
+impl FreeVariable<Variable> for PolyType {
+    fn free_vars(&self) -> HashSet<&Variable> {
         &self.mono.free_vars() - &HashSet::from_iter(self.quantifiers.iter())
     }
 }
