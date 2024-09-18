@@ -1,6 +1,7 @@
-use crate::expression::{Binding, Expression, Literal};
-use crate::type_checking::model::{MonoType, Variable};
-use crate::{free_variable::FreeVariable, lexer::Token};
+use crate::lexer::Token;
+use crate::model::expression::{Binding, Expression, Literal};
+use crate::model::typing::{MonoType, Variable};
+use crate::model::FreeVariable;
 use chumsky::prelude::*;
 use std::fmt::Display;
 

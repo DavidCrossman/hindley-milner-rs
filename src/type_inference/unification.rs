@@ -1,6 +1,6 @@
-use super::model::MonoType;
-use super::substitution::*;
 use super::{Result, TypeError};
+use crate::model::typing::MonoType;
+use crate::model::{Substitute, Substitution};
 
 pub fn unify(m1: MonoType, m2: MonoType) -> Result<Substitution> {
     match (m1, m2) {

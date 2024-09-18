@@ -1,6 +1,6 @@
-use crate::environment::Environment;
-use crate::expression::{Binding, Expression};
-use crate::type_checking::model::{MonoType, PolyType, Variable};
+use super::expression::{Binding, Expression};
+use super::typing::{MonoType, PolyType, Variable};
+use super::Environment;
 use std::collections::HashSet;
 
 pub trait FreeVariable<V> {

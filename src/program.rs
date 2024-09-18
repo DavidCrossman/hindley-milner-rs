@@ -1,11 +1,10 @@
 use crate::built_in::{self, BuiltInFn};
-use crate::environment::Environment;
-use crate::expression::Expression;
-use crate::free_variable::FreeVariable;
 use crate::interpreter::{self, Control, Value};
+use crate::model::expression::Expression;
+use crate::model::typing::{Kind, MonoType, PolyType, Variable};
+use crate::model::{Environment, FreeVariable, Substitute};
 use crate::parser::{self, DataConstructor, Item};
-use crate::type_checking::model::{Kind, MonoType, PolyType, Variable};
-use crate::type_checking::{self, substitution::Substitute};
+use crate::type_inference;
 use std::collections::HashSet;
 use thiserror::Error;
 
@@ -151,7 +150,7 @@ impl Program {
         })
     }
 
-    pub fn type_check(&self) -> type_checking::Result<Environment<PolyType>> {
+    pub fn type_check(&self) -> type_inference::Result<Environment<PolyType>> {
         (self.global.iter())
             .filter_map(|(name, c)| match c {
                 Control::Expr(e) => Some((name, e)),
@@ -163,7 +162,7 @@ impl Program {
                     Some(p) => p.instantiate(0),
                     None => (MonoType::Var(0.into()), 1),
                 };
-                let (s, _) = type_checking::algorithm::m(&env, expr, t.clone(), n)?;
+                let (s, _) = type_inference::algorithm::m(&env, expr, t.clone(), n)?;
                 let p = t.substitute(&s).generalise(&env);
                 Ok(env + (name.clone(), p))
             })

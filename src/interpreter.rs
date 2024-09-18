@@ -1,6 +1,6 @@
 use crate::built_in::BuiltInFn;
-use crate::environment::Environment;
-use crate::expression::{Binding, Expression, Literal};
+use crate::model::expression::{Binding, Expression, Literal};
+use crate::model::Environment;
 use std::fmt::Display;
 use thiserror::Error;
 

@@ -1,9 +1,7 @@
 pub mod algorithm;
-pub mod model;
-pub mod substitution;
 pub mod unification;
 
-use model::{MonoType, Variable};
+use crate::model::typing::{MonoType, Variable};
 use thiserror::Error;
 
 #[derive(Clone, Error, Debug)]

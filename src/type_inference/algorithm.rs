@@ -1,7 +1,7 @@
-use super::{model::*, substitution::*, unification::unify};
-use super::{Result, TypeError};
-use crate::environment::Environment;
-use crate::expression::{Binding, Expression, Literal};
+use super::{unification::unify, Result, TypeError};
+use crate::model::expression::{Binding, Expression, Literal};
+use crate::model::typing::{MonoType, PolyType, TypeConstructor};
+use crate::model::{Environment, Substitute, Substitution};
 
 pub fn w(
     env: &Environment<PolyType>,

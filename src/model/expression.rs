@@ -22,6 +22,12 @@ pub enum Expression {
     Fix(String, Binding, Box<Expression>),
 }
 
+impl From<String> for Binding {
+    fn from(value: String) -> Self {
+        Self::Var(value)
+    }
+}
+
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -64,11 +70,5 @@ impl Display for Expression {
             Let(x, e1, e2) => write!(f, "let {x} = {e1} in {e2}"),
             Fix(fun, x, e) => write!(f, "fix {fun} λ{x} → {e}"),
         }
-    }
-}
-
-impl From<String> for Binding {
-    fn from(value: String) -> Self {
-        Self::Var(value)
     }
 }

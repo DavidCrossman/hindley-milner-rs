@@ -1,12 +1,10 @@
 pub mod built_in;
-pub mod environment;
-pub mod expression;
-pub mod free_variable;
 pub mod interpreter;
 pub mod lexer;
+pub mod model;
 pub mod parser;
 pub mod program;
-pub mod type_checking;
+pub mod type_inference;
 
 fn main() {
     let source = r"

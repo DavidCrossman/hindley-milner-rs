@@ -1,5 +1,5 @@
-use super::model::{MonoType, PolyType, Variable};
-use crate::environment::Environment;
+use super::typing::{MonoType, PolyType, Variable};
+use super::Environment;
 use std::collections::{hash_map, HashMap};
 use std::fmt::Display;
 
