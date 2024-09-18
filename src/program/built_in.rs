@@ -38,6 +38,10 @@ impl BuiltInFn {
         }
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn apply(&self, value: Value) -> interpreter::Result<Value> {
         (self.fun)(value).map_err(|e| EvalError::BuiltIn(self.name.clone(), e))
     }
@@ -96,15 +100,31 @@ impl ValueConversionError {
     }
 }
 
+impl TryFrom<Value> for () {
+    type Error = ValueConversionError;
+
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Lit(Literal::Unit) => Ok(()),
+            _ => Err(ValueConversionError::new("()")),
+        }
+    }
+}
+
 impl TryFrom<Value> for i64 {
     type Error = ValueConversionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
-        if let Value::Lit(Literal::Int(n)) = value {
-            Ok(n)
-        } else {
-            Err(ValueConversionError::new("i64"))
+        match value {
+            Value::Lit(Literal::Int(n)) => Ok(n),
+            _ => Err(ValueConversionError::new("i64")),
         }
+    }
+}
+
+impl From<()> for Value {
+    fn from(_value: ()) -> Self {
+        Self::Lit(Literal::Unit)
     }
 }
 
@@ -124,5 +144,5 @@ pub static BUILT_INS: LazyLock<Environment<BuiltInFn>> = LazyLock::new(|| {
             y => Ok(x / y),
         }),
     ];
-    built_ins.into_iter().map(|f| (f.name.clone(), f)).collect()
+    built_ins.into_iter().map(|f| (f.name().to_owned(), f)).collect()
 });

@@ -1,4 +1,3 @@
-pub mod built_in;
 pub mod interpreter;
 pub mod lexer;
 pub mod model;

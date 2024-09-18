@@ -1,9 +1,13 @@
-use crate::built_in::{self, BuiltInFn};
+mod built_in;
+mod item;
+
+pub use built_in::BuiltInFn;
+pub use item::{DataConstructor, Item};
+
 use crate::interpreter::{self, Control, Value};
 use crate::model::expression::Expression;
 use crate::model::typing::{Kind, MonoType, PolyType, Variable};
 use crate::model::{Environment, FreeVariable, Substitute};
-use crate::parser::{self, DataConstructor, Item};
 use crate::type_inference;
 use std::collections::HashSet;
 use thiserror::Error;
@@ -40,7 +44,7 @@ pub enum ProgramError {
 pub type Result<T> = std::result::Result<T, ProgramError>;
 
 impl Program {
-    pub fn new(items: impl IntoIterator<Item = parser::Item>) -> Result<Self> {
+    pub fn new(items: impl IntoIterator<Item = item::Item>) -> Result<Self> {
         let mut main = None;
         let mut global = Environment::new();
         let mut declarations = Environment::new();

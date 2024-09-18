@@ -28,6 +28,12 @@ impl From<String> for Binding {
     }
 }
 
+impl From<Literal> for Expression {
+    fn from(value: Literal) -> Self {
+        Self::Lit(value)
+    }
+}
+
 impl Display for Literal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
