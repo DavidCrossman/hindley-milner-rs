@@ -1,17 +1,8 @@
-use crate::model::term::{Binding, Literal, Term};
+use crate::model::term::{Binding, Term};
 use crate::model::Environment;
-use crate::program::BuiltInFn;
+use crate::program::{BuiltInFn, Value};
 use std::fmt::Display;
 use thiserror::Error;
-
-#[derive(Debug, Clone)]
-pub enum Value {
-    Lit(Literal),
-    Closure(Binding, Term, Environment<Value>),
-    FixClosure(String, Binding, Term, Environment<Value>),
-    BuiltIn(BuiltInFn),
-    Data(String, Vec<Value>),
-}
 
 #[derive(Debug, Clone)]
 pub enum Control {
@@ -40,21 +31,6 @@ pub enum EvalError {
 }
 
 pub type Result<T> = std::result::Result<T, EvalError>;
-
-impl Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Lit(lit) => lit.fmt(f),
-            Self::Closure(b, t, env) => write!(f, "λ{env} {b} → {t}"),
-            Self::FixClosure(x, b, t, env) => write!(f, "fix {x} λ{env} {b} → {t}"),
-            Self::BuiltIn(fun) => fun.fmt(f),
-            Self::Data(name, values) => {
-                let values = values.iter().map(ToString::to_string).collect::<Vec<_>>();
-                write!(f, "{name} ⟨{}⟩", values.join(","))
-            }
-        }
-    }
-}
 
 impl Display for Control {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

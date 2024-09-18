@@ -1,10 +1,12 @@
 mod built_in;
 mod item;
+mod value;
 
 pub use built_in::BuiltInFn;
 pub use item::{DataConstructor, Item};
+pub use value::{Value, ValueConversionError};
 
-use crate::interpreter::{self, Control, Value};
+use crate::interpreter::{self, Control};
 use crate::model::term::Term;
 use crate::model::typing::{Kind, MonoType, PolyType, Variable};
 use crate::model::{Environment, FreeVariable, Substitute};

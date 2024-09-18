@@ -1,18 +1,12 @@
-use crate::interpreter::{self, EvalError, Value};
-use crate::model::{term::Literal, Environment};
+use super::{Value, ValueConversionError};
+use crate::interpreter::{self, EvalError};
+use crate::model::Environment;
 use std::sync::{Arc, LazyLock};
-use thiserror::Error;
 
 #[derive(Clone)]
 pub struct BuiltInFn {
     name: String,
     fun: Arc<dyn Fn(Value) -> anyhow::Result<Value> + Send + Sync>,
-}
-
-#[derive(Clone, Error, Debug)]
-#[error("failed to convert value to type {type_name}")]
-pub struct ValueConversionError {
-    type_name: String,
 }
 
 impl std::fmt::Debug for BuiltInFn {
@@ -79,58 +73,16 @@ impl BuiltInFn {
         Self::make_data_impl(name, arity, Vec::new())
     }
 
-    fn make_data_impl(name: String, arity: usize, values: Vec<Value>) -> Self {
+    fn make_data_impl(name: String, arity: usize, values: Vec<Arc<Value>>) -> Self {
         Self::new(name.clone(), move |v| {
             let mut values = values.clone();
-            values.push(v);
+            values.push(Arc::new(v));
             if values.len() >= arity {
                 Ok(Value::Data(name.clone(), values))
             } else {
                 Ok(Value::BuiltIn(Self::make_data_impl(name.clone(), arity, values)))
             }
         })
-    }
-}
-
-impl ValueConversionError {
-    pub fn new(type_name: impl AsRef<str>) -> Self {
-        Self {
-            type_name: type_name.as_ref().to_owned(),
-        }
-    }
-}
-
-impl TryFrom<Value> for () {
-    type Error = ValueConversionError;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::Lit(Literal::Unit) => Ok(()),
-            _ => Err(ValueConversionError::new("()")),
-        }
-    }
-}
-
-impl TryFrom<Value> for i64 {
-    type Error = ValueConversionError;
-
-    fn try_from(value: Value) -> Result<Self, Self::Error> {
-        match value {
-            Value::Lit(Literal::Int(n)) => Ok(n),
-            _ => Err(ValueConversionError::new("i64")),
-        }
-    }
-}
-
-impl From<()> for Value {
-    fn from(_value: ()) -> Self {
-        Self::Lit(Literal::Unit)
-    }
-}
-
-impl From<i64> for Value {
-    fn from(value: i64) -> Self {
-        Self::Lit(Literal::Int(value))
     }
 }
 
