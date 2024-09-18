@@ -104,7 +104,7 @@ impl MonoType {
 
     pub fn vars(&self) -> impl Iterator<Item = &Variable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
-            Self::Var(t) => Box::new(iter::once(t)),
+            Self::Var(v) => Box::new(iter::once(v)),
             Self::Con(_) => Box::new(iter::empty()),
             Self::App(m1, m2) => Box::new(m1.vars().chain(m2.vars())),
         };
@@ -113,7 +113,7 @@ impl MonoType {
 
     pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut Variable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
-            Self::Var(t) => Box::new(iter::once(t)),
+            Self::Var(v) => Box::new(iter::once(v)),
             Self::Con(_) => Box::new(iter::empty()),
             Self::App(m1, m2) => Box::new(m1.vars_mut().chain(m2.vars_mut())),
         };

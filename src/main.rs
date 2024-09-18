@@ -1,4 +1,5 @@
 pub mod interpreter;
+pub mod kind_inference;
 pub mod lexer;
 pub mod model;
 pub mod parser;

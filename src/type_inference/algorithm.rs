@@ -3,7 +3,11 @@ use crate::model::term::{Binding, Literal, Term};
 use crate::model::typing::{MonoType, PolyType, TypeConstructor};
 use crate::model::{Environment, Substitute, Substitution};
 
-pub fn w(env: &Environment<PolyType>, term: &Term, n: usize) -> Result<(Substitution, MonoType, usize)> {
+pub fn w(
+    env: &Environment<PolyType>,
+    term: &Term,
+    n: usize,
+) -> Result<(Substitution<MonoType>, MonoType, usize)> {
     match term {
         Term::Lit(lit) => Ok((
             Substitution::new(),
@@ -60,7 +64,7 @@ pub fn m(
     term: &Term,
     mono: MonoType,
     n: usize,
-) -> Result<(Substitution, usize)> {
+) -> Result<(Substitution<MonoType>, usize)> {
     match term {
         Term::Lit(lit) => unify(
             mono,
