@@ -1,12 +1,14 @@
 mod built_in;
+mod expression;
 mod item;
 mod value;
 
 pub use built_in::BuiltInFn;
+pub use expression::Expression;
 pub use item::{DataConstructor, Item};
 pub use value::{Value, ValueConversionError};
 
-use crate::interpreter::{self, Control};
+use crate::interpreter;
 use crate::model::term::Term;
 use crate::model::typing::{Kind, MonoType, PolyType, Variable};
 use crate::model::{Environment, FreeVariable, Substitute};
@@ -17,7 +19,7 @@ use thiserror::Error;
 #[derive(Clone)]
 pub struct Program {
     main: Term,
-    global: Environment<Control>,
+    global: Environment<Expression>,
     declarations: Environment<PolyType>,
     type_constructors: Environment<Kind>,
     built_ins: Environment<BuiltInFn>,
@@ -65,7 +67,7 @@ impl Program {
                     } else if name == "main" {
                         main = Some(term);
                     } else {
-                        global += (name, Control::Term(term));
+                        global += (name, Expression::Term(term));
                     }
                 }
                 Item::BuiltInDefinition(name) => {
@@ -94,9 +96,9 @@ impl Program {
                     });
                     for DataConstructor { name, types } in sum {
                         let mut mono = mono.clone();
-                        let c;
+                        let expr;
                         if types.is_empty() {
-                            c = Control::Value(Value::Data(name.clone(), Vec::new()));
+                            expr = Expression::Value(Value::Data(name.clone(), Vec::new()));
                         } else {
                             let arity = types.len();
                             mono = (types.into_iter().rev()).fold(mono, |m1, m2| MonoType::function(m2, m1));
@@ -108,7 +110,7 @@ impl Program {
                                 }
                             });
                             let fun = BuiltInFn::make_data_constructor(name.clone(), arity);
-                            c = Control::Value(Value::BuiltIn(fun));
+                            expr = Expression::Value(Value::BuiltIn(fun));
                         }
                         let p = PolyType::new(mono, vars.clone());
                         if let Some(&v) = p.free_vars().iter().next() {
@@ -120,7 +122,7 @@ impl Program {
                         if global.contains_name(&name) || built_ins.contains_name(&name) || name == "main" {
                             return Err(ProgramError::DuplicateDefinition(name));
                         }
-                        global += (name.clone(), c);
+                        global += (name.clone(), expr);
                         declarations += (name, p);
                     }
                 }
@@ -159,22 +161,22 @@ impl Program {
     pub fn type_check(&self) -> type_inference::Result<Environment<PolyType>> {
         (self.global.iter())
             .filter_map(|(name, c)| match c {
-                Control::Term(t) => Some((name, t)),
+                Expression::Term(t) => Some((name, t)),
                 _ => None,
             })
             .chain(std::iter::once((&"main".to_owned(), &self.main)))
             .try_fold(self.declarations.clone(), |mut env, (name, expr)| {
-                let (t, n) = match env.remove(name) {
+                let (mono, n) = match env.remove(name) {
                     Some(p) => p.instantiate(0),
                     None => (MonoType::Var(0.into()), 1),
                 };
-                let (s, _) = type_inference::algorithm::m(&env, expr, t.clone(), n)?;
-                let p = t.substitute(&s).generalise(&env);
+                let (s, _) = type_inference::algorithm::m(&env, expr, mono.clone(), n)?;
+                let p = mono.substitute(&s).generalise(&env);
                 Ok(env + (name.clone(), p))
             })
     }
 
     pub fn run(&self) -> interpreter::Result<Value> {
-        interpreter::eval(&self.main, &self.global, &self.built_ins)
+        interpreter::eval(self.main.clone().into(), &self.global, &self.built_ins)
     }
 }

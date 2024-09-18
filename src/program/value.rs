@@ -53,6 +53,12 @@ impl From<i64> for Value {
     }
 }
 
+impl From<Literal> for Value {
+    fn from(value: Literal) -> Self {
+        Self::Lit(value)
+    }
+}
+
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
