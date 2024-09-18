@@ -1,5 +1,5 @@
 use crate::lexer::Token;
-use crate::model::expression::{Binding, Expression, Literal};
+use crate::model::term::{Binding, Literal, Term};
 use crate::model::typing::{MonoType, Variable};
 use crate::model::FreeVariable;
 use crate::program::{DataConstructor, Item};
@@ -19,24 +19,21 @@ fn binding_parser() -> impl Parser<Token, Binding, Error = Simple<Token>> + Copy
 fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
     let term_def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
-        .then(expr_parser());
+        .then(term_parser());
 
     let term_def_parser = term_def_parser.or(select! {Token::Ident(f) => f}
         .then(binding_parser())
         .then(binding_parser().repeated())
         .then_ignore(just(Token::Assign))
-        .then(expr_parser())
-        .map(|(((f, b), bs), e)| {
-            let e = bs
-                .into_iter()
-                .rev()
-                .fold(e, |e, b| Expression::Abs(b, Box::new(e)));
-            let e = if b != f.clone().into() && e.free_vars().contains(&f) {
-                Expression::Fix(f.clone(), b, Box::new(e))
+        .then(term_parser())
+        .map(|(((f, b), bs), t)| {
+            let t = bs.into_iter().rev().fold(t, |t, b| Term::Abs(b, Box::new(t)));
+            let t = if b != f.clone().into() && t.free_vars().contains(&f) {
+                Term::Fix(f.clone(), b, Box::new(t))
             } else {
-                Expression::Abs(b, Box::new(e))
+                Term::Abs(b, Box::new(t))
             };
-            (f, e)
+            (f, t)
         }));
 
     let builtin_def_parser = select! {Token::Ident(x) => x}
@@ -59,7 +56,7 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
 
     let item_parser = choice((
         type_def_parser.map(|((name, vars), cons)| Item::TypeDefinition(name, vars, cons)),
-        term_def_parser.map(|(name, e)| Item::TermDefinition(name, e)),
+        term_def_parser.map(|(name, t)| Item::TermDefinition(name, t)),
         builtin_def_parser.map(Item::BuiltInDefinition),
         dec_parser.map(|(name, m)| Item::Declaration(name, m)),
     ));
@@ -103,61 +100,53 @@ fn create_type_parsers() -> (
     (atom, type_parser)
 }
 
-fn expr_parser() -> impl Parser<Token, Expression, Error = Simple<Token>> + Clone {
-    recursive(|expr_parser| {
-        let var_parser = select! {Token::Ident(s) => Expression::Var(s)};
+fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
+    recursive(|term_parser| {
+        let var_parser = select! {Token::Ident(s) => Term::Var(s)};
 
         let literal_parser = select! {
-            Token::Unit => Expression::Lit(Literal::Unit),
-            Token::Int(n) => Expression::Lit(Literal::Int(n)),
+            Token::Unit => Term::Lit(Literal::Unit),
+            Token::Int(n) => Term::Lit(Literal::Int(n)),
         };
 
         let abs_parser = just(Token::Lambda)
             .ignore_then(binding_parser().repeated().at_least(1))
             .then_ignore(just(Token::Arrow))
-            .then(expr_parser.clone())
-            .map(|(xs, e)| {
-                xs.into_iter()
-                    .rev()
-                    .fold(e, |e, b| Expression::Abs(b, Box::new(e)))
-            });
+            .then(term_parser.clone())
+            .map(|(bs, t)| bs.into_iter().rev().fold(t, |t, b| Term::Abs(b, Box::new(t))));
 
         let let_parser = just(Token::Let)
             .ignore_then(binding_parser())
             .then_ignore(just(Token::Assign))
-            .then(expr_parser.clone())
+            .then(term_parser.clone())
             .then_ignore(just(Token::In))
-            .then(expr_parser.clone())
-            .map(|((b, e1), e2)| Expression::Let(b, Box::new(e1), Box::new(e2)));
+            .then(term_parser.clone())
+            .map(|((b, t1), t2)| Term::Let(b, Box::new(t1), Box::new(t2)));
 
         let let_parser = let_parser.or(just(Token::Let)
             .ignore_then(select! {Token::Ident(f) => f})
             .then(binding_parser())
             .then(binding_parser().repeated())
             .then_ignore(just(Token::Assign))
-            .then(expr_parser.clone())
+            .then(term_parser.clone())
             .then_ignore(just(Token::In))
-            .then(expr_parser.clone())
-            .map(|((((f, b), bs), e1), e2)| {
-                let e1 = bs
-                    .into_iter()
-                    .rev()
-                    .fold(e1, |e, b| Expression::Abs(b, Box::new(e)));
-                let e1 = if b != f.clone().into() && e1.free_vars().contains(&f) {
-                    Expression::Fix(f.clone(), b, Box::new(e1))
+            .then(term_parser.clone())
+            .map(|((((f, b), bs), t1), t2)| {
+                let t1 = bs.into_iter().rev().fold(t1, |t, b| Term::Abs(b, Box::new(t)));
+                let t1 = if b != f.clone().into() && t1.free_vars().contains(&f) {
+                    Term::Fix(f.clone(), b, Box::new(t1))
                 } else {
-                    Expression::Abs(b, Box::new(e1))
+                    Term::Abs(b, Box::new(t1))
                 };
-                Expression::Let(f.into(), Box::new(e1), Box::new(e2))
+                Term::Let(f.into(), Box::new(t1), Box::new(t2))
             }));
 
-        let paren_parser = expr_parser.delimited_by(just(Token::LeftParen), just(Token::RightParen));
+        let paren_parser = term_parser.delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
-        let expr1_parser = choice((literal_parser, var_parser, abs_parser, let_parser, paren_parser));
+        let term1_parser = choice((literal_parser, var_parser, abs_parser, let_parser, paren_parser));
 
-        expr1_parser
-            .clone()
-            .then(expr1_parser.repeated())
-            .foldl(|e1, e2| Expression::App(Box::new(e1), Box::new(e2)))
+        (term1_parser.clone())
+            .then(term1_parser.repeated())
+            .foldl(|t1, t2| Term::App(Box::new(t1), Box::new(t2)))
     })
 }

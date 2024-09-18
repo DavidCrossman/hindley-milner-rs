@@ -1,4 +1,4 @@
-pub mod expression;
+pub mod term;
 pub mod typing;
 
 mod environment;

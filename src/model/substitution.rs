@@ -40,7 +40,7 @@ impl FromIterator<(Variable, MonoType)> for Substitution {
 impl Display for Substitution {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mappings = (self.iter())
-            .map(|(x, m)| format!("{x} -> {m}"))
+            .map(|(v, m)| format!("{v} -> {m}"))
             .collect::<Vec<_>>();
         write!(f, "{{{}}}", mappings.join(", "))
     }
@@ -69,8 +69,8 @@ impl Substitution {
 impl Substitute for MonoType {
     fn substitute_mut(&mut self, subst: &Substitution) {
         self.traverse(&mut |m1| {
-            if let MonoType::Var(t) = m1 {
-                if let Some(m2) = subst.map.get(t) {
+            if let MonoType::Var(v) = m1 {
+                if let Some(m2) = subst.map.get(v) {
                     *m1 = m2.clone();
                 }
             }
@@ -81,7 +81,7 @@ impl Substitute for MonoType {
 impl Substitute for PolyType {
     fn substitute_mut(&mut self, subst: &Substitution) {
         let mut subst = subst.clone();
-        subst.map.retain(|t, _| !self.quantifiers.contains(t));
+        subst.map.retain(|v, _| !self.quantifiers.contains(v));
         self.mono.substitute_mut(&subst);
     }
 }

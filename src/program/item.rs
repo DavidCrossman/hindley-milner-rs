@@ -1,4 +1,4 @@
-use crate::model::expression::Expression;
+use crate::model::term::Term;
 use crate::model::typing::{MonoType, Variable};
 use std::fmt::Display;
 
@@ -11,7 +11,7 @@ pub struct DataConstructor {
 #[derive(Clone, Debug)]
 pub enum Item {
     TypeDefinition(String, Vec<Variable>, Vec<DataConstructor>),
-    TermDefinition(String, Expression),
+    TermDefinition(String, Term),
     BuiltInDefinition(String),
     Declaration(String, MonoType),
 }
@@ -47,7 +47,7 @@ impl Display for Item {
                 }
                 write!(f, "{s}")
             }
-            Self::TermDefinition(s, e) => write!(f, "{s} = {e}"),
+            Self::TermDefinition(s, t) => write!(f, "{s} = {t}"),
             Self::BuiltInDefinition(s) => write!(f, "{s} = builtin"),
             Self::Declaration(s, p) => write!(f, "{s} : {p}"),
         }

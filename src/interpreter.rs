@@ -1,4 +1,4 @@
-use crate::model::expression::{Binding, Expression, Literal};
+use crate::model::term::{Binding, Literal, Term};
 use crate::model::Environment;
 use crate::program::BuiltInFn;
 use std::fmt::Display;
@@ -7,21 +7,21 @@ use thiserror::Error;
 #[derive(Debug, Clone)]
 pub enum Value {
     Lit(Literal),
-    Closure(Binding, Expression, Environment<Value>),
-    FixClosure(String, Binding, Expression, Environment<Value>),
+    Closure(Binding, Term, Environment<Value>),
+    FixClosure(String, Binding, Term, Environment<Value>),
     BuiltIn(BuiltInFn),
     Data(String, Vec<Value>),
 }
 
 #[derive(Debug, Clone)]
 pub enum Control {
-    Val(Value),
-    Expr(Expression),
+    Value(Value),
+    Term(Term),
 }
 
 #[derive(Debug, Clone)]
 pub enum Frame {
-    HApp(Expression, Environment<Value>),
+    HApp(Term, Environment<Value>),
     AppH(Value),
 }
 
@@ -45,8 +45,8 @@ impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Lit(lit) => lit.fmt(f),
-            Self::Closure(b, e, env) => write!(f, "λ{env} {b} → {e}"),
-            Self::FixClosure(x, b, e, env) => write!(f, "fix {x} λ{env} {b} → {e}"),
+            Self::Closure(b, t, env) => write!(f, "λ{env} {b} → {t}"),
+            Self::FixClosure(x, b, t, env) => write!(f, "fix {x} λ{env} {b} → {t}"),
             Self::BuiltIn(fun) => fun.fmt(f),
             Self::Data(name, values) => {
                 let values = values.iter().map(ToString::to_string).collect::<Vec<_>>();
@@ -59,8 +59,8 @@ impl Display for Value {
 impl Display for Control {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Val(v) => v.fmt(f),
-            Self::Expr(e) => e.fmt(f),
+            Self::Value(v) => v.fmt(f),
+            Self::Term(t) => t.fmt(f),
         }
     }
 }
@@ -68,21 +68,17 @@ impl Display for Control {
 impl Display for Frame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::HApp(e, env) => write!(f, "HApp ({e}) {env}"),
-            Self::AppH(e) => write!(f, "AppH ({e})"),
+            Self::HApp(t, env) => write!(f, "HApp ({t}) {env}"),
+            Self::AppH(v) => write!(f, "AppH ({v})"),
         }
     }
 }
 
-pub fn eval(
-    expr: &Expression,
-    global: &Environment<Control>,
-    built_ins: &Environment<BuiltInFn>,
-) -> Result<Value> {
-    let mut s = (Control::Expr(expr.clone()), Environment::new(), Vec::new());
+pub fn eval(expr: &Term, global: &Environment<Control>, built_ins: &Environment<BuiltInFn>) -> Result<Value> {
+    let mut s = (Control::Term(expr.clone()), Environment::new(), Vec::new());
     loop {
         s = match eval1(s, global, built_ins)? {
-            (Control::Val(v), _, k) if k.is_empty() => break Ok(v),
+            (Control::Value(v), _, k) if k.is_empty() => break Ok(v),
             s => s,
         }
     }
@@ -93,44 +89,44 @@ fn eval1(
     global: &Environment<Control>,
     built_ins: &Environment<BuiltInFn>,
 ) -> Result<State> {
-    use Control::{Expr, Val};
-    use Expression::{Abs, App, Fix, Let, Lit as ExprLit, Var};
-    use Value::{BuiltIn, Closure, FixClosure, Lit as ValLit};
+    use self::Term::{Abs, App, Fix, Let, Lit as TermLit, Var};
+    use self::Value::{BuiltIn, Closure, FixClosure, Lit as ValueLit};
+    use Control::{Term, Value};
     match c {
-        Expr(ExprLit(lit)) => Ok((Val(ValLit(lit)), env, k)),
-        Expr(Var(x)) => (env.remove(&x).map(Val))
+        Term(TermLit(lit)) => Ok((Value(ValueLit(lit)), env, k)),
+        Term(Var(x)) => (env.remove(&x).map(Value))
             .or_else(|| global.get(&x).cloned())
-            .or_else(|| built_ins.get(&x).cloned().map(BuiltIn).map(Val))
+            .or_else(|| built_ins.get(&x).cloned().map(BuiltIn).map(Value))
             .ok_or(EvalError::UnknownVariable(x))
             .map(|c| (c, env, k)),
-        Expr(Abs(b, e)) => Ok((Val(Closure(b, *e, env)), Environment::new(), k)),
-        Expr(Fix(f, b, e)) => Ok((Val(FixClosure(f, b, *e, env)), Environment::new(), k)),
-        Expr(App(e1, e2)) => {
-            k.push(Frame::HApp(*e2, env.clone()));
-            Ok((Expr(*e1), env, k))
+        Term(Abs(b, t)) => Ok((Value(Closure(b, *t, env)), Environment::new(), k)),
+        Term(Fix(f, b, t)) => Ok((Value(FixClosure(f, b, *t, env)), Environment::new(), k)),
+        Term(App(t1, t2)) => {
+            k.push(Frame::HApp(*t2, env.clone()));
+            Ok((Term(*t1), env, k))
         }
-        Expr(Let(x, e1, e2)) => Ok((Expr(App(Box::new(Abs(x, e2)), e1)), env, k)),
-        Val(v) => match k.pop() {
-            Some(Frame::HApp(e, env)) => {
+        Term(Let(x, t1, t2)) => Ok((Term(App(Box::new(Abs(x, t2)), t1)), env, k)),
+        Value(v) => match k.pop() {
+            Some(Frame::HApp(t, env)) => {
                 k.push(Frame::AppH(v));
-                Ok((Expr(e), env, k))
+                Ok((Term(t), env, k))
             }
-            Some(Frame::AppH(Closure(b, e, mut env))) => {
+            Some(Frame::AppH(Closure(b, t, mut env))) => {
                 if let Binding::Var(x) = b {
                     env += (x, v);
                 }
-                Ok((Expr(e), env, k))
+                Ok((Term(t), env, k))
             }
-            Some(Frame::AppH(FixClosure(f, b, e, mut env))) => {
+            Some(Frame::AppH(FixClosure(f, b, t, mut env))) => {
                 if let Binding::Var(x) = &b {
                     env += (x.clone(), v);
                 }
-                env += (f.clone(), FixClosure(f, b, e.clone(), env.clone()));
-                Ok((Expr(e), env, k))
+                env += (f.clone(), FixClosure(f, b, t.clone(), env.clone()));
+                Ok((Term(t), env, k))
             }
-            Some(Frame::AppH(BuiltIn(fun))) => Ok((Val(fun.apply(v)?), env, k)),
-            Some(f @ Frame::AppH(_)) => Err(EvalError::InvalidState(Val(v), env, f)),
-            None => Ok((Val(v), env, k)),
+            Some(Frame::AppH(BuiltIn(fun))) => Ok((Value(fun.apply(v)?), env, k)),
+            Some(f @ Frame::AppH(_)) => Err(EvalError::InvalidState(Value(v), env, f)),
+            None => Ok((Value(v), env, k)),
         },
     }
 }

@@ -18,8 +18,8 @@ impl From<MonoType> for PolyType {
 
 impl Display for PolyType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for t in &self.quantifiers {
-            write!(f, "∀{t}. ")?;
+        for v in &self.quantifiers {
+            write!(f, "∀{v}. ")?;
         }
         write!(f, "{}", self.mono)
     }
@@ -38,9 +38,9 @@ impl PolyType {
         let mappings = (self.quantifiers.into_iter())
             .zip((next_fresh..).map(Variable::Inferred))
             .collect::<HashMap<_, _>>();
-        self.mono.vars_mut().for_each(|t1| {
-            if let Some(t2) = mappings.get(t1) {
-                *t1 = t2.to_owned();
+        self.mono.vars_mut().for_each(|v1| {
+            if let Some(v2) = mappings.get(v1) {
+                *v1 = v2.to_owned();
             }
         });
         (self.mono, n)

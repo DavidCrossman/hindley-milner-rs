@@ -1,4 +1,4 @@
-use super::expression::{Binding, Expression};
+use super::term::{Binding, Term};
 use super::typing::{MonoType, PolyType, Variable};
 use super::Environment;
 use std::collections::HashSet;
@@ -19,22 +19,22 @@ impl FreeVariable<Variable> for PolyType {
     }
 }
 
-impl FreeVariable<String> for Expression {
+impl FreeVariable<String> for Term {
     fn free_vars(&self) -> HashSet<&String> {
-        use Expression::*;
+        use Term::*;
         match self {
             Lit(_) => HashSet::new(),
             Var(v) => [v].into(),
-            App(e1, e2) => e1.free_vars().union(&e2.free_vars()).copied().collect(),
-            Abs(Binding::Var(x), e) => &e.free_vars() - &[x].into(),
-            Abs(Binding::Discard, e) => e.free_vars(),
-            Let(Binding::Var(x), e1, e2) => (&e2.free_vars() - &[x].into())
-                .union(&e1.free_vars())
+            App(t1, t2) => t1.free_vars().union(&t2.free_vars()).copied().collect(),
+            Abs(Binding::Var(x), t) => &t.free_vars() - &[x].into(),
+            Abs(Binding::Discard, t) => t.free_vars(),
+            Let(Binding::Var(x), t1, t2) => (&t2.free_vars() - &[x].into())
+                .union(&t1.free_vars())
                 .copied()
                 .collect(),
-            Let(Binding::Discard, e1, e2) => e2.free_vars().union(&e1.free_vars()).copied().collect(),
-            Fix(f, Binding::Var(x), e) => &e.free_vars() - &[f, x].into(),
-            Fix(f, Binding::Discard, e) => &e.free_vars() - &[f].into(),
+            Let(Binding::Discard, t1, t2) => t2.free_vars().union(&t1.free_vars()).copied().collect(),
+            Fix(f, Binding::Var(x), t) => &t.free_vars() - &[f, x].into(),
+            Fix(f, Binding::Discard, t) => &t.free_vars() - &[f].into(),
         }
     }
 }

@@ -5,7 +5,7 @@ pub use built_in::BuiltInFn;
 pub use item::{DataConstructor, Item};
 
 use crate::interpreter::{self, Control, Value};
-use crate::model::expression::Expression;
+use crate::model::term::Term;
 use crate::model::typing::{Kind, MonoType, PolyType, Variable};
 use crate::model::{Environment, FreeVariable, Substitute};
 use crate::type_inference;
@@ -14,7 +14,7 @@ use thiserror::Error;
 
 #[derive(Clone)]
 pub struct Program {
-    main: Expression,
+    main: Term,
     global: Environment<Control>,
     declarations: Environment<PolyType>,
     type_constructors: Environment<Kind>,
@@ -54,16 +54,16 @@ impl Program {
         type_constructors += ("Int".to_owned(), Kind::Type);
         for item in items {
             match item {
-                Item::TermDefinition(name, expr) => {
+                Item::TermDefinition(name, term) => {
                     if global.contains_name(&name)
                         || built_ins.contains_name(&name)
                         || main.is_some() && name == "main"
                     {
                         return Err(ProgramError::DuplicateDefinition(name));
                     } else if name == "main" {
-                        main = Some(expr);
+                        main = Some(term);
                     } else {
-                        global += (name, Control::Expr(expr));
+                        global += (name, Control::Term(term));
                     }
                 }
                 Item::BuiltInDefinition(name) => {
@@ -94,7 +94,7 @@ impl Program {
                         let mut mono = mono.clone();
                         let c;
                         if types.is_empty() {
-                            c = Control::Val(Value::Data(name.clone(), Vec::new()));
+                            c = Control::Value(Value::Data(name.clone(), Vec::new()));
                         } else {
                             let arity = types.len();
                             mono = (types.into_iter().rev()).fold(mono, |m1, m2| MonoType::function(m2, m1));
@@ -106,11 +106,11 @@ impl Program {
                                 }
                             });
                             let fun = BuiltInFn::make_data_constructor(name.clone(), arity);
-                            c = Control::Val(Value::BuiltIn(fun));
+                            c = Control::Value(Value::BuiltIn(fun));
                         }
                         let p = PolyType::new(mono, vars.clone());
-                        if let Some(&t) = p.free_vars().iter().next() {
-                            return Err(ProgramError::UnknownTypeVar(t.clone()));
+                        if let Some(&v) = p.free_vars().iter().next() {
+                            return Err(ProgramError::UnknownTypeVar(v.clone()));
                         }
                         if declarations.contains_name(&name) {
                             return Err(ProgramError::DuplicateSignature(name));
@@ -157,7 +157,7 @@ impl Program {
     pub fn type_check(&self) -> type_inference::Result<Environment<PolyType>> {
         (self.global.iter())
             .filter_map(|(name, c)| match c {
-                Control::Expr(e) => Some((name, e)),
+                Control::Term(t) => Some((name, t)),
                 _ => None,
             })
             .chain(std::iter::once((&"main".to_owned(), &self.main)))

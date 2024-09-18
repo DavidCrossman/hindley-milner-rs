@@ -5,11 +5,11 @@ use crate::model::{Substitute, Substitution};
 pub fn unify(m1: MonoType, m2: MonoType) -> Result<Substitution> {
     match (m1, m2) {
         (m1, m2) if m1 == m2 => Ok(Substitution::new()),
-        (MonoType::Var(t), m) => {
-            if m.vars().any(|t2| &t == t2) {
-                Err(TypeError::InfiniteType(t, m))
+        (MonoType::Var(v), m) => {
+            if m.vars().any(|v2| &v == v2) {
+                Err(TypeError::InfiniteType(v, m))
             } else {
-                Ok([(t, m)].into_iter().collect())
+                Ok([(v, m)].into_iter().collect())
             }
         }
         (MonoType::App(l1, r1), MonoType::App(l2, r2)) => {

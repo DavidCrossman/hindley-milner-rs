@@ -1,5 +1,5 @@
 use crate::interpreter::{self, EvalError, Value};
-use crate::model::{expression::Literal, Environment};
+use crate::model::{term::Literal, Environment};
 use std::sync::{Arc, LazyLock};
 use thiserror::Error;
 
