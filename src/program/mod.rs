@@ -8,11 +8,10 @@ pub use expression::Expression;
 pub use item::{DataConstructor, Item};
 pub use value::{Value, ValueConversionError};
 
-use crate::interpreter;
 use crate::model::term::Term;
 use crate::model::typing::{Kind, MonoType, PolyType, Variable};
 use crate::model::{Environment, FreeVariable, Substitute};
-use crate::type_inference;
+use crate::{interpreter, kind_inference, type_inference};
 use std::collections::HashSet;
 use thiserror::Error;
 
@@ -147,25 +146,47 @@ impl Program {
         })
     }
 
-    pub fn type_check(&self) -> type_inference::Result<Environment<PolyType>> {
+    pub fn type_check(&mut self) -> type_inference::Result<()> {
         (self.global.iter())
             .filter_map(|(name, c)| match c {
                 Expression::Term(t) => Some((name, t)),
                 _ => None,
             })
             .chain(std::iter::once((&"main".to_owned(), &self.main)))
-            .try_fold(self.type_env.clone(), |mut env, (name, expr)| {
-                let (mono, n) = match env.remove(name) {
+            .try_for_each(|(name, expr)| {
+                let (mono, n) = match self.type_env.remove(name) {
                     Some(p) => p.instantiate(0),
                     None => (MonoType::Var(0.into()), 1),
                 };
-                let (s, _) = type_inference::algorithm::m(&env, expr, mono.clone(), n)?;
-                let p = mono.substitute(&s).generalise(&env);
-                Ok(env + (name.clone(), p))
+                let (s, _) = type_inference::algorithm::m(&self.type_env, expr, mono.clone(), n)?;
+                let p = mono.substitute(&s).generalise(&self.type_env);
+                self.type_env += (name.clone(), p);
+                Ok(())
             })
+    }
+
+    pub fn kind_check(&self) -> kind_inference::Result<()> {
+        for p in self.type_env.values().cloned() {
+            let mut m = p.mono;
+            let mut env = self.type_constructors.clone();
+            for v in p.quantifiers {
+                env += (v.to_name(), Kind::Var(v));
+            }
+            m.substitute_constructors(&env);
+            kind_inference::algorithm::m(&env, &m, Kind::Type, 0)?;
+        }
+        Ok(())
     }
 
     pub fn run(&self) -> interpreter::Result<Value> {
         interpreter::eval(self.main.clone().into(), &self.global, &self.built_ins)
+    }
+
+    pub fn types(&self) -> &Environment<PolyType> {
+        &self.type_env
+    }
+
+    pub fn type_constructors(&self) -> &Environment<Kind> {
+        &self.type_constructors
     }
 }

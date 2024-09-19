@@ -16,6 +16,15 @@ impl<T> IntoIterator for Environment<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a Environment<T> {
+    type Item = (&'a String, &'a T);
+    type IntoIter = hash_map::Iter<'a, String, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 impl<T> FromIterator<(String, T)> for Environment<T> {
     fn from_iter<I: IntoIterator<Item = (String, T)>>(iter: I) -> Self {
         Self {

@@ -14,10 +14,13 @@ fn main() {
     match lexer::lex(source) {
         Ok(tokens) => match parser::parse(&tokens) {
             Ok(items) => match program::Program::new(items) {
-                Ok(program) => match program.type_check() {
-                    Ok(_) => match program.run() {
-                        Ok(v) => println!("{v}"),
-                        Err(e) => println!("runtime error: {:?}", anyhow::Error::from(e)),
+                Ok(mut program) => match program.type_check() {
+                    Ok(_) => match program.kind_check() {
+                        Ok(_) => match program.run() {
+                            Ok(v) => println!("{v}"),
+                            Err(e) => println!("runtime error: {:?}", anyhow::Error::from(e)),
+                        },
+                        Err(e) => println!("kind error: {e}"),
                     },
                     Err(e) => println!("type error: {e}"),
                 },
