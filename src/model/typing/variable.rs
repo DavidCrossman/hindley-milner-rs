@@ -26,3 +26,12 @@ impl Display for Variable {
         }
     }
 }
+
+impl Variable {
+    pub fn to_name(&self) -> String {
+        match self {
+            Variable::Named(name) => name.clone(),
+            Variable::Inferred(n) => format!("{n}"),
+        }
+    }
+}
