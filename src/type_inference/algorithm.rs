@@ -5,14 +5,13 @@ use crate::model::{Environment, Substitute};
 
 pub fn w(env: &Environment<PolyType>, term: &Term, n: usize) -> Result<(Substitution, MonoType, usize)> {
     match term {
-        Term::Lit(lit) => Ok((
-            Substitution::new(),
-            MonoType::Con(match lit {
+        Term::Lit(lit) => {
+            let m = MonoType::Con(match lit {
                 Literal::Unit => "Unit".to_owned(),
                 Literal::Int(_) => "Int".to_owned(),
-            }),
-            n,
-        )),
+            });
+            Ok((Substitution::new(), m, n))
+        }
         Term::Var(v) => match env.get(v) {
             Some(p) => {
                 let (m, n) = p.clone().instantiate(n);
@@ -62,14 +61,13 @@ pub fn m(
     n: usize,
 ) -> Result<(Substitution, usize)> {
     match term {
-        Term::Lit(lit) => unify(
-            mono,
-            MonoType::Con(match lit {
+        Term::Lit(lit) => {
+            let m = MonoType::Con(match lit {
                 Literal::Unit => "Unit".to_owned(),
                 Literal::Int(_) => "Int".to_owned(),
-            }),
-        )
-        .map(|s| (s, n)),
+            });
+            unify(mono, m).map(|s| (s, n))
+        }
         Term::Var(v) => match env.get(v) {
             Some(p) => {
                 let (m2, n) = p.clone().instantiate(n);

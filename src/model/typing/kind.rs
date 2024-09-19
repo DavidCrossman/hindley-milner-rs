@@ -28,6 +28,10 @@ impl From<Variable> for Kind {
 }
 
 impl Kind {
+    pub fn arrow(k1: impl Into<Self>, k2: impl Into<Self>) -> Self {
+        Self::Arrow(Box::new(k1.into()), Box::new(k2.into()))
+    }
+
     pub fn traverse(&mut self, f: &mut impl FnMut(&mut Self)) {
         f(self);
         match self {
