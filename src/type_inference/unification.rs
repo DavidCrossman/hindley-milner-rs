@@ -1,8 +1,8 @@
-use super::{Result, TypeError};
+use super::{Result, Substitution, TypeError};
 use crate::model::typing::MonoType;
-use crate::model::{Substitute, Substitution};
+use crate::model::Substitute;
 
-pub fn unify(m1: MonoType, m2: MonoType) -> Result<Substitution<MonoType>> {
+pub fn unify(m1: MonoType, m2: MonoType) -> Result<Substitution> {
     match (m1, m2) {
         (m1, m2) if m1 == m2 => Ok(Substitution::new()),
         (MonoType::Var(v), m) => {

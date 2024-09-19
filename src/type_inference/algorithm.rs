@@ -1,19 +1,15 @@
-use super::{unification::unify, Result, TypeError};
+use super::{unify, Result, Substitution, TypeError};
 use crate::model::term::{Binding, Literal, Term};
-use crate::model::typing::{MonoType, PolyType, TypeConstructor};
-use crate::model::{Environment, Substitute, Substitution};
+use crate::model::typing::{MonoType, PolyType};
+use crate::model::{Environment, Substitute};
 
-pub fn w(
-    env: &Environment<PolyType>,
-    term: &Term,
-    n: usize,
-) -> Result<(Substitution<MonoType>, MonoType, usize)> {
+pub fn w(env: &Environment<PolyType>, term: &Term, n: usize) -> Result<(Substitution, MonoType, usize)> {
     match term {
         Term::Lit(lit) => Ok((
             Substitution::new(),
             MonoType::Con(match lit {
-                Literal::Unit => TypeConstructor::Named("Unit".to_owned()),
-                Literal::Int(_) => TypeConstructor::Named("Int".to_owned()),
+                Literal::Unit => "Unit".to_owned(),
+                Literal::Int(_) => "Int".to_owned(),
             }),
             n,
         )),
@@ -64,13 +60,13 @@ pub fn m(
     term: &Term,
     mono: MonoType,
     n: usize,
-) -> Result<(Substitution<MonoType>, usize)> {
+) -> Result<(Substitution, usize)> {
     match term {
         Term::Lit(lit) => unify(
             mono,
             MonoType::Con(match lit {
-                Literal::Unit => TypeConstructor::Named("Unit".to_owned()),
-                Literal::Int(_) => TypeConstructor::Named("Int".to_owned()),
+                Literal::Unit => "Unit".to_owned(),
+                Literal::Int(_) => "Int".to_owned(),
             }),
         )
         .map(|s| (s, n)),

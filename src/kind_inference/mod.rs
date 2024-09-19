@@ -1,4 +1,6 @@
-pub mod unification;
+mod unification;
+
+pub use unification::unify;
 
 use crate::model::typing::{Kind, Variable};
 use thiserror::Error;
@@ -12,3 +14,5 @@ pub enum KindError {
 }
 
 pub type Result<T> = std::result::Result<T, KindError>;
+
+type Substitution = crate::model::Substitution<Kind>;

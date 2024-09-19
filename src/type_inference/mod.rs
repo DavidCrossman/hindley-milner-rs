@@ -1,5 +1,8 @@
 pub mod algorithm;
-pub mod unification;
+
+mod unification;
+
+pub use unification::unify;
 
 use crate::model::typing::{MonoType, Variable};
 use thiserror::Error;
@@ -15,3 +18,5 @@ pub enum TypeError {
 }
 
 pub type Result<T> = std::result::Result<T, TypeError>;
+
+type Substitution = crate::model::Substitution<MonoType>;

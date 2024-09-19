@@ -24,7 +24,7 @@ impl Display for DataConstructor {
             let types = (self.types.iter())
                 .map(|m| match m {
                     MonoType::App(..) => format!("({m})"),
-                    MonoType::Var(_) | MonoType::Con(_) => m.to_string(),
+                    MonoType::Var(_) | MonoType::Arrow | MonoType::Con(_) => m.to_string(),
                 })
                 .collect::<Vec<_>>();
             write!(f, "{} {}", self.name, types.join(" "))

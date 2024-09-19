@@ -1,17 +1,12 @@
-use super::{PolyType, Variable};
+use super::{Kind, PolyType, Variable};
 use crate::model::{Environment, FreeVariable};
 use std::{fmt::Display, iter};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum TypeConstructor {
-    Function,
-    Named(String),
-}
-
-#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum MonoType {
     Var(Variable),
-    Con(TypeConstructor),
+    Con(String),
+    Arrow,
     App(Box<MonoType>, Box<MonoType>),
 }
 
@@ -22,30 +17,9 @@ enum DisplayMonoType {
     App(Box<DisplayMonoType>, Box<DisplayMonoType>),
 }
 
-impl From<String> for TypeConstructor {
-    fn from(value: String) -> Self {
-        Self::Named(value)
-    }
-}
-
 impl From<Variable> for MonoType {
     fn from(value: Variable) -> Self {
         Self::Var(value)
-    }
-}
-
-impl From<TypeConstructor> for MonoType {
-    fn from(value: TypeConstructor) -> Self {
-        Self::Con(value)
-    }
-}
-
-impl Display for TypeConstructor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Function => "→".fmt(f),
-            Self::Named(s) => s.fmt(f),
-        }
     }
 }
 
@@ -53,12 +27,12 @@ impl Display for DisplayMonoType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Name(s) => s.fmt(f),
-            Self::PartialFunc(m) => write!(f, "({m} {})", TypeConstructor::Function),
+            Self::PartialFunc(m) => write!(f, "({m} →)"),
             Self::Func(l, r) => match l.as_ref() {
                 Self::Name(_) | Self::App(..) | Self::PartialFunc(_) => {
-                    write!(f, "{l} {} {r}", TypeConstructor::Function)
+                    write!(f, "{l} → {r}")
                 }
-                Self::Func(..) => write!(f, "({l}) {} {r}", TypeConstructor::Function),
+                Self::Func(..) => write!(f, "({l}) → {r}"),
             },
             Self::App(m1, m2) => match m1.as_ref() {
                 Self::Func(..) => match m2.as_ref() {
@@ -83,10 +57,7 @@ impl Display for MonoType {
 impl MonoType {
     pub fn function(m1: impl Into<Self>, m2: impl Into<Self>) -> Self {
         Self::App(
-            Box::new(Self::App(
-                Box::new(Self::Con(TypeConstructor::Function)),
-                Box::new(m1.into()),
-            )),
+            Box::new(Self::App(Box::new(Self::Arrow), Box::new(m1.into()))),
             Box::new(m2.into()),
         )
     }
@@ -94,7 +65,7 @@ impl MonoType {
     pub fn traverse(&mut self, f: &mut impl FnMut(&mut Self)) {
         f(self);
         match self {
-            Self::Var(_) | Self::Con(_) => {}
+            Self::Var(_) | Self::Con(_) | Self::Arrow => {}
             Self::App(m1, m2) => {
                 m1.traverse(f);
                 m2.traverse(f);
@@ -105,7 +76,7 @@ impl MonoType {
     pub fn vars(&self) -> impl Iterator<Item = &Variable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(v) => Box::new(iter::once(v)),
-            Self::Con(_) => Box::new(iter::empty()),
+            Self::Arrow | Self::Con(_) => Box::new(iter::empty()),
             Self::App(m1, m2) => Box::new(m1.vars().chain(m2.vars())),
         };
         iter
@@ -114,7 +85,7 @@ impl MonoType {
     pub fn vars_mut(&mut self) -> impl Iterator<Item = &mut Variable> {
         let iter: Box<dyn Iterator<Item = _>> = match self {
             Self::Var(v) => Box::new(iter::once(v)),
-            Self::Con(_) => Box::new(iter::empty()),
+            Self::Arrow | Self::Con(_) => Box::new(iter::empty()),
             Self::App(m1, m2) => Box::new(m1.vars_mut().chain(m2.vars_mut())),
         };
         iter
@@ -127,6 +98,16 @@ impl MonoType {
             mono: self,
         }
     }
+
+    pub fn substitute_constructors(&mut self, type_constructors: &Environment<Kind>) {
+        self.traverse(&mut |m| {
+            if let MonoType::Var(v) = &m {
+                if type_constructors.contains_name(&v.to_name()) {
+                    *m = MonoType::Con(v.to_name());
+                }
+            }
+        });
+    }
 }
 
 impl DisplayMonoType {
@@ -134,13 +115,13 @@ impl DisplayMonoType {
         use MonoType::*;
         match m {
             Var(v) => Self::Name(v.to_string()),
-            Con(con @ TypeConstructor::Function) => Self::Name(format!("({con})")),
-            Con(con) => Self::Name(con.to_string()),
+            Arrow => Self::Name("(→)".to_owned()),
+            Con(name) => Self::Name(name.clone()),
             App(m1, m2) => match m1.as_ref() {
-                App(f, m1) if matches!(**f, Con(TypeConstructor::Function)) => {
+                App(f, m1) if matches!(f.as_ref(), Arrow) => {
                     Self::Func(Box::new(Self::make(m1)), Box::new(Self::make(m2)))
                 }
-                Con(TypeConstructor::Function) => Self::PartialFunc(Box::new(Self::make(m2))),
+                Arrow => Self::PartialFunc(Box::new(Self::make(m2))),
                 _ => Self::App(Box::new(Self::make(m1)), Box::new(Self::make(m2))),
             },
         }

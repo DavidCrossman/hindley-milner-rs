@@ -1,8 +1,8 @@
-use super::{KindError, Result};
+use super::{KindError, Result, Substitution};
 use crate::model::typing::Kind;
-use crate::model::{Substitute, Substitution};
+use crate::model::Substitute;
 
-pub fn unify(k1: Kind, k2: Kind) -> Result<Substitution<Kind>> {
+pub fn unify(k1: Kind, k2: Kind) -> Result<Substitution> {
     match (k1, k2) {
         (k1, k2) if k1 == k2 => Ok(Substitution::new()),
         (Kind::Var(v), k) => {

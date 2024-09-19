@@ -20,7 +20,7 @@ use thiserror::Error;
 pub struct Program {
     main: Term,
     global: Environment<Expression>,
-    declarations: Environment<PolyType>,
+    type_env: Environment<PolyType>,
     type_constructors: Environment<Kind>,
     built_ins: Environment<BuiltInFn>,
 }
@@ -51,7 +51,7 @@ impl Program {
     pub fn new(items: impl IntoIterator<Item = item::Item>) -> Result<Self> {
         let mut main = None;
         let mut global = Environment::new();
-        let mut declarations = Environment::new();
+        let mut type_env = Environment::new();
         let mut type_constructors = Environment::new();
         let mut built_ins = Environment::new();
         type_constructors += ("Unit".to_owned(), Kind::Type);
@@ -88,11 +88,12 @@ impl Program {
                     if let Some(&v) = HashSet::from_iter(&vars).difference(&used_vars).next() {
                         return Err(ProgramError::UnusedTypeVar(v.clone()));
                     };
-                    let kind = (0..vars.len())
+                    let kind = vars
+                        .iter()
                         .fold(Kind::Type, |k, _| Kind::Arrow(Box::new(Kind::Type), Box::new(k)));
                     type_constructors += (type_name.clone(), kind);
-                    let mono = (vars.iter()).fold(MonoType::Con(type_name.clone().into()), |m, s| {
-                        MonoType::App(Box::new(m), Box::new(MonoType::Var(s.clone())))
+                    let mono = (vars.iter()).fold(MonoType::Con(type_name.clone()), |m, v| {
+                        MonoType::App(Box::new(m), Box::new(MonoType::Var(v.clone())))
                     });
                     for DataConstructor { name, types } in sum {
                         let mut mono = mono.clone();
@@ -102,13 +103,7 @@ impl Program {
                         } else {
                             let arity = types.len();
                             mono = (types.into_iter().rev()).fold(mono, |m1, m2| MonoType::function(m2, m1));
-                            mono.traverse(&mut |m| {
-                                if let MonoType::Var(Variable::Named(name)) = &m {
-                                    if type_constructors.contains_name(name) {
-                                        *m = MonoType::Con(name.clone().into());
-                                    }
-                                }
-                            });
+                            mono.substitute_constructors(&type_constructors);
                             let fun = BuiltInFn::make_data_constructor(name.clone(), arity);
                             expr = Expression::Value(Value::BuiltIn(fun));
                         }
@@ -116,43 +111,37 @@ impl Program {
                         if let Some(&v) = p.free_vars().iter().next() {
                             return Err(ProgramError::UnknownTypeVar(v.clone()));
                         }
-                        if declarations.contains_name(&name) {
+                        if type_env.contains_name(&name) {
                             return Err(ProgramError::DuplicateSignature(name));
                         }
                         if global.contains_name(&name) || built_ins.contains_name(&name) || name == "main" {
                             return Err(ProgramError::DuplicateDefinition(name));
                         }
                         global += (name.clone(), expr);
-                        declarations += (name, p);
+                        type_env += (name, p);
                     }
                 }
                 Item::Declaration(name, mut m) => {
-                    if declarations.contains_name(&name) {
+                    if type_env.contains_name(&name) {
                         return Err(ProgramError::DuplicateSignature(name));
                     }
-                    m.traverse(&mut |m| {
-                        if let MonoType::Var(Variable::Named(name)) = &m {
-                            if type_constructors.contains_name(name) {
-                                *m = MonoType::Con(name.clone().into());
-                            }
-                        }
-                    });
-                    declarations += (name, m.generalise(&declarations));
+                    m.substitute_constructors(&type_constructors);
+                    type_env += (name, m.generalise(&type_env));
                 }
             }
         }
-        if let Some(name) = (declarations.names())
+        if let Some(name) = (type_env.names())
             .find(|name| !global.contains_name(name) && !built_ins.contains_name(name) && name != &"main")
         {
             return Err(ProgramError::MissingDefinition(name.clone()));
         }
-        if let Some(name) = built_ins.names().find(|name| !declarations.contains_name(name)) {
+        if let Some(name) = built_ins.names().find(|name| !type_env.contains_name(name)) {
             return Err(ProgramError::BuiltInMissingSignature(name.clone()));
         }
         Ok(Self {
             main: main.ok_or(ProgramError::NoMain)?,
             global,
-            declarations,
+            type_env,
             type_constructors,
             built_ins,
         })
@@ -165,7 +154,7 @@ impl Program {
                 _ => None,
             })
             .chain(std::iter::once((&"main".to_owned(), &self.main)))
-            .try_fold(self.declarations.clone(), |mut env, (name, expr)| {
+            .try_fold(self.type_env.clone(), |mut env, (name, expr)| {
                 let (mono, n) = match env.remove(name) {
                     Some(p) => p.instantiate(0),
                     None => (MonoType::Var(0.into()), 1),
