@@ -84,12 +84,16 @@ fn create_type_parsers() -> (
 
     let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.into()) };
 
+    let arrow_parser = just(Token::Arrow)
+        .delimited_by(just(Token::LeftParen), just(Token::RightParen))
+        .to(MonoType::Arrow);
+
     let paren_parser = (type_parser.clone()).delimited_by(just(Token::LeftParen), just(Token::RightParen));
 
     let app_parser = (atom.clone().then(atom.clone().repeated()))
         .foldl(|m1, m2| MonoType::App(Box::new(m1), Box::new(m2)));
 
-    atom.define(ident_parser.or(paren_parser));
+    atom.define(choice((ident_parser, arrow_parser, paren_parser)));
 
     type_parser.define(
         (app_parser.clone().then_ignore(just(Token::Arrow)).repeated())

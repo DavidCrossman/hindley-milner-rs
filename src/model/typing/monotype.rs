@@ -36,12 +36,12 @@ impl Display for DisplayMonoType {
             },
             Self::App(m1, m2) => match m1.as_ref() {
                 Self::Func(..) => match m2.as_ref() {
-                    Self::Name(_) => write!(f, "({m1}) {m2}"),
-                    Self::Func(..) | Self::App(..) | Self::PartialFunc(_) => write!(f, "({m1}) ({m2})"),
+                    Self::Name(_) | Self::PartialFunc(_) => write!(f, "({m1}) {m2}"),
+                    Self::Func(..) | Self::App(..) => write!(f, "({m1}) ({m2})"),
                 },
                 Self::Name(_) | Self::App(..) | Self::PartialFunc(_) => match m2.as_ref() {
-                    Self::Name(_) => write!(f, "{m1} {m2}"),
-                    Self::Func(..) | Self::App(..) | Self::PartialFunc(_) => write!(f, "{m1} ({m2})"),
+                    Self::Name(_) | Self::PartialFunc(_) => write!(f, "{m1} {m2}"),
+                    Self::Func(..) | Self::App(..) => write!(f, "{m1} ({m2})"),
                 },
             },
         }
