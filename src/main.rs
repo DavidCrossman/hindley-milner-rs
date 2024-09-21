@@ -24,7 +24,7 @@ fn main() {
                     },
                     Err(e) => println!("type error: {e}"),
                 },
-                Err(e) => println!("program error: {e}"),
+                Err(e) => println!("program error: {:?}", anyhow::Error::from(e)),
             },
             Err(e) => println!("parse error: {e:?}"),
         },

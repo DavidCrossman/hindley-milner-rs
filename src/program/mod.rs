@@ -8,10 +8,11 @@ pub use expression::Expression;
 pub use item::{DataConstructor, Item};
 pub use value::{Value, ValueConversionError};
 
+use crate::kind_inference::{self, KindError};
 use crate::model::term::Term;
 use crate::model::typing::{Kind, MonoType, PolyType, Variable};
-use crate::model::{Environment, FreeVariable, Substitute};
-use crate::{interpreter, kind_inference, type_inference};
+use crate::model::{Environment, FreeVariable, Substitute, Substitution};
+use crate::{interpreter, type_inference};
 use std::collections::HashSet;
 use thiserror::Error;
 
@@ -42,6 +43,8 @@ pub enum ProgramError {
     UnknownTypeVar(Variable),
     #[error("unused type variable '{0}'")]
     UnusedTypeVar(Variable),
+    #[error("invalid type constructor '{0}'")]
+    InvalidTypeConstructor(String, #[source] KindError),
 }
 
 pub type Result<T> = std::result::Result<T, ProgramError>;
@@ -51,10 +54,10 @@ impl Program {
         let mut main = None;
         let mut global = Environment::new();
         let mut type_env = Environment::new();
-        let mut type_constructors = Environment::new();
+        let mut kind_env = Environment::new();
         let mut built_ins = Environment::new();
-        type_constructors += ("Unit".to_owned(), Kind::Type);
-        type_constructors += ("Int".to_owned(), Kind::Type);
+        kind_env += ("Unit".to_owned(), Kind::Type);
+        kind_env += ("Int".to_owned(), Kind::Type);
         for item in items {
             match item {
                 Item::TermDefinition(name, term) => {
@@ -87,26 +90,24 @@ impl Program {
                     if let Some(&v) = HashSet::from_iter(&vars).difference(&used_vars).next() {
                         return Err(ProgramError::UnusedTypeVar(v.clone()));
                     };
-                    let kind = vars
-                        .iter()
-                        .fold(Kind::Type, |k, _| Kind::Arrow(Box::new(Kind::Type), Box::new(k)));
-                    type_constructors += (type_name.clone(), kind);
-                    let mono = (vars.iter()).fold(MonoType::Con(type_name.clone()), |m, v| {
+                    let kind = (vars.iter().rev()).fold(Kind::Type, |k, v| Kind::arrow(v.clone(), k));
+                    kind_env += (type_name.clone(), kind.clone());
+                    let mono = vars.iter().fold(MonoType::Con(type_name.clone()), |m, v| {
                         MonoType::App(Box::new(m), Box::new(MonoType::Var(v.clone())))
                     });
+                    let mut subst = Substitution::new();
                     for DataConstructor { name, types } in sum {
                         let mut mono = mono.clone();
-                        let expr;
-                        if types.is_empty() {
-                            expr = Expression::Value(Value::Data(name.clone(), Vec::new()));
+                        let expr = if types.is_empty() {
+                            Expression::Value(Value::Data(name.clone(), Vec::new()))
                         } else {
-                            let arity = types.len();
+                            let fun = BuiltInFn::make_data_constructor(name.clone(), types.len());
                             mono = (types.into_iter().rev()).fold(mono, |m1, m2| MonoType::function(m2, m1));
-                            mono.substitute_constructors(&type_constructors);
-                            let fun = BuiltInFn::make_data_constructor(name.clone(), arity);
-                            expr = Expression::Value(Value::BuiltIn(fun));
-                        }
-                        let p = PolyType::new(mono, vars.clone());
+                            mono.substitute_constructors_mut(&kind_env);
+                            Expression::Value(Value::BuiltIn(fun))
+                        };
+
+                        let p = PolyType::new(mono.clone(), vars.clone());
                         if let Some(&v) = p.free_vars().iter().next() {
                             return Err(ProgramError::UnknownTypeVar(v.clone()));
                         }
@@ -117,15 +118,26 @@ impl Program {
                             return Err(ProgramError::DuplicateDefinition(name));
                         }
                         global += (name.clone(), expr);
-                        type_env += (name, p);
+                        type_env += (name.clone(), p);
+
+                        let mut env = kind_env.clone();
+                        env.extend(vars.iter().map(|v| (v.to_name(), Kind::Var(v.clone()))));
+
+                        mono.substitute_constructors_mut(&env);
+                        let (s, _) = kind_inference::algorithm::m(&env, &mono, Kind::Type, 0)
+                            .map_err(|e| ProgramError::InvalidTypeConstructor(name, e))?;
+
+                        subst.combine_mut(&s);
                     }
+                    let kind = kind.substitute(&subst);
+                    let subst = kind.vars().cloned().map(|v| (v, Kind::Type)).collect();
+                    kind_env += (type_name, kind.substitute(&subst));
                 }
-                Item::Declaration(name, mut m) => {
+                Item::Declaration(name, m) => {
                     if type_env.contains_name(&name) {
                         return Err(ProgramError::DuplicateSignature(name));
                     }
-                    m.substitute_constructors(&type_constructors);
-                    type_env += (name, m.generalise(&type_env));
+                    type_env += (name, m.substitute_constructors(&kind_env).generalise(&type_env));
                 }
             }
         }
@@ -141,7 +153,7 @@ impl Program {
             main: main.ok_or(ProgramError::NoMain)?,
             global,
             type_env,
-            type_constructors,
+            type_constructors: kind_env,
             built_ins,
         })
     }
@@ -167,13 +179,10 @@ impl Program {
 
     pub fn kind_check(&self) -> kind_inference::Result<()> {
         for p in self.type_env.values().cloned() {
-            let mut m = p.mono;
             let mut env = self.type_constructors.clone();
-            for v in p.quantifiers {
-                env += (v.to_name(), Kind::Var(v));
-            }
-            m.substitute_constructors(&env);
-            kind_inference::algorithm::m(&env, &m, Kind::Type, 0)?;
+            env.extend(p.quantifiers.into_iter().map(|v| (v.to_name(), Kind::Var(v))));
+            let mono = p.mono.substitute_constructors(&env);
+            kind_inference::algorithm::m(&env, &mono, Kind::Type, 0)?;
         }
         Ok(())
     }

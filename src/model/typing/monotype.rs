@@ -99,11 +99,16 @@ impl MonoType {
         }
     }
 
-    pub fn substitute_constructors(&mut self, type_constructors: &Environment<Kind>) {
+    pub fn substitute_constructors(mut self, type_constructors: &Environment<Kind>) -> Self {
+        self.substitute_constructors_mut(type_constructors);
+        self
+    }
+
+    pub fn substitute_constructors_mut(&mut self, type_constructors: &Environment<Kind>) {
         self.traverse(&mut |m| {
-            if let MonoType::Var(v) = &m {
+            if let Self::Var(v) = &m {
                 if type_constructors.contains_name(&v.to_name()) {
-                    *m = MonoType::Con(v.to_name());
+                    *m = Self::Con(v.to_name());
                 }
             }
         });
