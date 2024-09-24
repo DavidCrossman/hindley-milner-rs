@@ -2,6 +2,7 @@ use crate::lexer::Token;
 use crate::model::term::{Binding, Literal, Term};
 use crate::model::typing::{MonoType, Variable};
 use crate::model::FreeVariable;
+use crate::program::TypeDefinition;
 use crate::program::{DataConstructor, Item};
 use chumsky::prelude::*;
 
@@ -55,10 +56,11 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
         .then(type_parser());
 
     let item_parser = choice((
-        type_def_parser.map(|((name, vars), cons)| Item::TypeDefinition(name, vars, cons)),
+        type_def_parser
+            .map(|((name, vars), cons)| Item::TypeDefinition(TypeDefinition::new(name, vars, cons))),
         term_def_parser.map(|(name, t)| Item::TermDefinition(name, t)),
         builtin_def_parser.map(Item::BuiltInDefinition),
-        dec_parser.map(|(name, m)| Item::Declaration(name, m)),
+        dec_parser.map(|(name, m)| Item::TypeDeclaration(name, m)),
     ));
 
     item_parser

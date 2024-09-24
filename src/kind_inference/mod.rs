@@ -4,7 +4,8 @@ mod unification;
 
 pub use unification::unify;
 
-use crate::model::typing::{Kind, Variable};
+use crate::model::typing::{Kind, PolyType, Variable};
+use crate::model::Environment;
 use thiserror::Error;
 
 #[derive(Clone, Error, Debug)]
@@ -22,3 +23,11 @@ pub enum KindError {
 pub type Result<T> = std::result::Result<T, KindError>;
 
 type Substitution = crate::model::Substitution<Kind>;
+
+pub fn kind_check(p: &PolyType, k: Kind, type_constructors: &Environment<Kind>) -> Result<()> {
+    let mut env = type_constructors.clone();
+    env.extend(p.quantifiers.iter().map(|v| (v.to_name(), Kind::Var(v.clone()))));
+    let mono = p.mono.clone().substitute_constructors(&env);
+    algorithm::m(&env, &mono, k, 0)?;
+    Ok(())
+}

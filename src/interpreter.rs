@@ -33,11 +33,7 @@ impl Display for Frame {
     }
 }
 
-pub fn eval(
-    expr: Expression,
-    global: &Environment<Expression>,
-    built_ins: &Environment<BuiltInFn>,
-) -> Result<Value> {
+pub fn eval(expr: Expression, global: &Environment<Expression>, built_ins: &[BuiltInFn]) -> Result<Value> {
     let mut s = (expr, Environment::new(), Vec::new());
     loop {
         s = match eval1(s, global, built_ins)? {
@@ -50,7 +46,7 @@ pub fn eval(
 fn eval1(
     (expr, mut env, mut k): State,
     global: &Environment<Expression>,
-    built_ins: &Environment<BuiltInFn>,
+    built_ins: &[BuiltInFn],
 ) -> Result<State> {
     use self::Term::{Abs, App, Fix, Let, Lit, Var};
     use self::Value::{BuiltIn, Closure, FixClosure};
@@ -59,7 +55,7 @@ fn eval1(
         Term(Lit(lit)) => Ok((Value(lit.into()), env, k)),
         Term(Var(x)) => (env.remove(&x).map(Value))
             .or_else(|| global.get(&x).cloned())
-            .or_else(|| built_ins.get(&x).cloned().map(BuiltIn).map(Value))
+            .or_else(|| (built_ins.iter().find(|f| f.name() == x)).map(|f| Value(f.clone().into())))
             .ok_or(EvalError::UnknownVariable(x))
             .map(|e| (e, env, k)),
         Term(Abs(b, t)) => Ok((Value(Closure(b, *t, env)), Environment::new(), k)),
