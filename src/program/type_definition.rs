@@ -75,7 +75,7 @@ impl TypeDefinition {
         }
     }
 
-    pub fn to_constructors(
+    pub fn to_data_constructors(
         self,
         type_constructors: &mut Environment<Kind>,
     ) -> Result<(Environment<Expression>, Environment<PolyType>), TypeDefinitionError> {
