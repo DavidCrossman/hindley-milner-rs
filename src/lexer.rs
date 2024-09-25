@@ -32,12 +32,10 @@ pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
         PaddedToken::Tok(t) => tokens.push(t),
         PaddedToken::Newline => {
             use Token::*;
-            if tokens.last().is_some_and(|t| {
-                matches!(
-                    t,
-                    BuiltIn | TypeSum | Ident(_) | Unit | Int(_) | LeftParen | RightParen
-                )
-            }) {
+            if tokens
+                .last()
+                .is_some_and(|t| matches!(t, BuiltIn | Ident(_) | Unit | Int(_) | RightParen))
+            {
                 tokens.push(Token::Separator);
             }
         }

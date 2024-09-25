@@ -4,7 +4,7 @@ use crate::model::typing::{MonoType, Variable};
 use crate::model::FreeVariable;
 use crate::program::TypeDefinition;
 use crate::program::{DataConstructor, Item};
-use chumsky::prelude::*;
+use chumsky::{prelude::*, Error};
 
 pub fn parse(tokens: &[Token]) -> Result<Vec<Item>, Vec<Simple<Token>>> {
     items_parser().parse(tokens)
@@ -15,6 +15,15 @@ fn binding_parser() -> impl Parser<Token, Binding, Error = Simple<Token>> + Copy
         Token::Ident(x) => Binding::Var(x),
         Token::Discard => Binding::Discard,
     }
+}
+
+fn paren_parser<O, E: Error<Token>>(
+    inner: impl Parser<Token, O, Error = E> + Clone,
+) -> impl Parser<Token, O, Error = E> + Clone {
+    inner.delimited_by(
+        just(Token::LeftParen),
+        just(Token::Separator).or_not().then(just(Token::RightParen)),
+    )
 }
 
 fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
@@ -90,12 +99,14 @@ fn create_type_parsers() -> (
         .delimited_by(just(Token::LeftParen), just(Token::RightParen))
         .to(MonoType::Arrow);
 
-    let paren_parser = (type_parser.clone()).delimited_by(just(Token::LeftParen), just(Token::RightParen));
-
     let app_parser = (atom.clone().then(atom.clone().repeated()))
         .foldl(|m1, m2| MonoType::App(Box::new(m1), Box::new(m2)));
 
-    atom.define(choice((ident_parser, arrow_parser, paren_parser)));
+    atom.define(choice((
+        ident_parser,
+        arrow_parser,
+        paren_parser(type_parser.clone()),
+    )));
 
     type_parser.define(
         (app_parser.clone().then_ignore(just(Token::Arrow)).repeated())
@@ -147,9 +158,13 @@ fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
                 Term::Let(f.into(), Box::new(t1), Box::new(t2))
             }));
 
-        let paren_parser = term_parser.delimited_by(just(Token::LeftParen), just(Token::RightParen));
-
-        let term1_parser = choice((literal_parser, var_parser, abs_parser, let_parser, paren_parser));
+        let term1_parser = choice((
+            literal_parser,
+            var_parser,
+            abs_parser,
+            let_parser,
+            paren_parser(term_parser),
+        ));
 
         (term1_parser.clone())
             .then(term1_parser.repeated())
