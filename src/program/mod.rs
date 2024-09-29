@@ -133,7 +133,7 @@ impl Program {
             .map(|(n, t)| (n.as_str(), t))
             .chain(std::iter::once(("main", &main)))
             .try_for_each(|(name, term)| {
-                type_inference::infer_type(name, term, &types)
+                type_inference::infer_type(name, term, &types, &data_constructors)
                     .map(|p| types += (name.to_owned(), p))
                     .map_err(|e| ProgramError::TypeError(term.clone(), e))
             })?;
