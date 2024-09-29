@@ -51,6 +51,7 @@ pub fn w(env: &Environment<PolyType>, term: &Term, n: usize) -> Result<(Substitu
             let s2 = unify(beta.substitute(&s1), m1.clone())?;
             Ok((s1.combine(&s2), m1.substitute(&s2), n))
         }
+        Term::Match(_, _) => todo!(),
     }
 }
 
@@ -106,5 +107,6 @@ pub fn m(
             let env = env.clone() + (f.clone(), mono.clone().into());
             m(&env, &Term::Abs(x.clone(), t.clone()), mono, n)
         }
+        Term::Match(_, _) => todo!(),
     }
 }

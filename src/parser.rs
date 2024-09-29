@@ -1,5 +1,5 @@
 use crate::lexer::Token;
-use crate::model::term::{Binding, Literal, Term};
+use crate::model::term::{Binding, Literal, Pattern, Term};
 use crate::model::typing::{MonoType, Variable};
 use crate::model::{DataConstructor, FreeVariable};
 use crate::program::{Item, TypeDefinition};
@@ -170,11 +170,28 @@ fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
                 Term::Let(f.into(), Box::new(t1), Box::new(t2))
             }));
 
+        let pattern_parser = select! {Token::Ident(x) => x}
+            .then(binding_parser().repeated())
+            .map(|(constructor, bindings)| Pattern::new(constructor, bindings));
+
+        let match_parser = just(Token::Match)
+            .ignore_then(term_parser.clone())
+            .then_ignore(just(Token::With))
+            .then(
+                pattern_parser
+                    .then_ignore(just(Token::FatArrow))
+                    .then(term_parser.clone())
+                    .separated_by(just(Token::Separator))
+                    .at_least(1),
+            )
+            .map(|(term, arms)| Term::Match(Box::new(term), arms));
+
         let term1_parser = choice((
             literal_parser,
             var_parser,
             abs_parser,
             let_parser,
+            match_parser,
             paren_parser(term_parser),
         ));
 

@@ -1,4 +1,4 @@
-use super::term::{Binding, Term};
+use super::term::{Binding, Pattern, Term};
 use super::typing::{MonoType, PolyType, Variable};
 use super::Environment;
 use std::collections::HashSet;
@@ -19,6 +19,18 @@ impl FreeVariable<Variable> for PolyType {
     }
 }
 
+impl FreeVariable<String> for Pattern {
+    fn free_vars(&self) -> HashSet<&String> {
+        self.bindings
+            .iter()
+            .filter_map(|b| match b {
+                Binding::Var(v) => Some(v),
+                Binding::Discard => None,
+            })
+            .collect()
+    }
+}
+
 impl FreeVariable<String> for Term {
     fn free_vars(&self) -> HashSet<&String> {
         use Term::*;
@@ -35,6 +47,10 @@ impl FreeVariable<String> for Term {
             Let(Binding::Discard, t1, t2) => t2.free_vars().union(&t1.free_vars()).copied().collect(),
             Fix(f, Binding::Var(x), t) => &t.free_vars() - &[f, x].into(),
             Fix(f, Binding::Discard, t) => &t.free_vars() - &[f].into(),
+            Match(t, arms) => (arms.iter())
+                .flat_map(|(p, t)| &t.free_vars() - &p.free_vars())
+                .chain(t.free_vars())
+                .collect(),
         }
     }
 }

@@ -14,8 +14,9 @@ pub enum Frame {
 pub enum EvalError {
     #[error("variable '{0}' is not defined")]
     UnknownVariable(String),
-    #[error("invalid state: expression = {0}; environment = {1}; next frame = {2}")]
-    InvalidState(Expression, Environment<Value>, Frame),
+    #[error("invalid state: expression = {0}; environment = {1}; next frame = {}",
+        .2.as_ref().map_or("None".to_owned(), ToString::to_string))]
+    InvalidState(Expression, Environment<Value>, Option<Frame>),
     #[error("error in built-in function '{0}'")]
     BuiltIn(String, #[source] anyhow::Error),
 }
@@ -44,7 +45,7 @@ pub fn eval(expr: Expression, global: &Environment<Expression>) -> Result<Value>
 }
 
 fn eval1((expr, mut env, mut k): State, global: &Environment<Expression>) -> Result<State> {
-    use self::Term::{Abs, App, Fix, Let, Lit, Var};
+    use self::Term::{Abs, App, Fix, Let, Lit, Match, Var};
     use self::Value::{BuiltIn, Closure, FixClosure};
     use Expression::{Term, Value};
     match expr {
@@ -60,6 +61,7 @@ fn eval1((expr, mut env, mut k): State, global: &Environment<Expression>) -> Res
             Ok((Term(*t1), env, k))
         }
         Term(Let(x, t1, t2)) => Ok((Term(App(Box::new(Abs(x, t2)), t1)), env, k)),
+        e @ Term(Match(_, _)) => Err(EvalError::InvalidState(e, env, k.pop())),
         Value(v) => match k.pop() {
             Some(Frame::HApp(t, env)) => {
                 k.push(Frame::AppH(v));
@@ -79,7 +81,7 @@ fn eval1((expr, mut env, mut k): State, global: &Environment<Expression>) -> Res
                 Ok((Term(t), env, k))
             }
             Some(Frame::AppH(BuiltIn(fun))) => Ok((Value(fun.apply(v)?), env, k)),
-            Some(f @ Frame::AppH(_)) => Err(EvalError::InvalidState(Value(v), env, f)),
+            Some(f @ Frame::AppH(_)) => Err(EvalError::InvalidState(Value(v), env, Some(f))),
             None => Ok((Value(v), env, k)),
         },
     }
