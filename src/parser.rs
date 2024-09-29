@@ -1,9 +1,8 @@
 use crate::lexer::Token;
 use crate::model::term::{Binding, Literal, Term};
 use crate::model::typing::{MonoType, Variable};
-use crate::model::FreeVariable;
-use crate::program::TypeDefinition;
-use crate::program::{DataConstructor, Item};
+use crate::model::{DataConstructor, FreeVariable};
+use crate::program::{Item, TypeDefinition};
 use chumsky::{prelude::*, Error};
 
 pub fn parse(tokens: &[Token]) -> Result<Vec<Item>, Vec<Simple<Token>>> {
@@ -29,47 +28,60 @@ fn paren_parser<O, E: Error<Token>>(
 fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
     let term_def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
-        .then(term_parser());
+        .then(term_parser())
+        .map(|(name, t)| Item::TermDefinition(name, t));
 
     let term_def_parser = term_def_parser.or(select! {Token::Ident(f) => f}
         .then(binding_parser())
         .then(binding_parser().repeated())
         .then_ignore(just(Token::Assign))
         .then(term_parser())
-        .map(|(((f, b), bs), t)| {
+        .map(|(((name, b), bs), t)| {
             let t = bs.into_iter().rev().fold(t, |t, b| Term::Abs(b, Box::new(t)));
-            let t = if b != f.clone().into() && t.free_vars().contains(&f) {
-                Term::Fix(f.clone(), b, Box::new(t))
+            let t = if b != name.clone().into() && t.free_vars().contains(&name) {
+                Term::Fix(name.clone(), b, Box::new(t))
             } else {
                 Term::Abs(b, Box::new(t))
             };
-            (f, t)
+            Item::TermDefinition(name, t)
         }));
 
     let builtin_def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
-        .then_ignore(just(Token::BuiltIn));
-
-    let data_con_parser = select! {Token::Ident(x) => x}
-        .then(type_atom_parser().repeated())
-        .map(|(name, types)| DataConstructor { name, types });
+        .then_ignore(just(Token::BuiltIn))
+        .map(Item::BuiltInDefinition);
 
     let type_def_parser = just(Token::TypeDef)
         .ignore_then(select! {Token::Ident(x) => x})
         .then(select! {Token::Ident(x) => x}.map(Variable::Named).repeated())
         .then_ignore(just(Token::Assign))
-        .then(data_con_parser.separated_by(just(Token::TypeSum)).at_least(1));
+        .then_with(|(name, vars)| {
+            let return_type = vars.iter().fold(MonoType::Con(name.clone()), |m, v| {
+                MonoType::App(Box::new(m), Box::new(MonoType::Var(v.clone())))
+            });
 
-    let dec_parser = select! {Token::Ident(x) => x}
+            let data_con_parser = {
+                select! {Token::Ident(x) => x}
+                    .then(type_atom_parser().repeated())
+                    .map(move |(name, params)| DataConstructor::new(name, return_type.clone(), params))
+            };
+
+            data_con_parser
+                .separated_by(just(Token::TypeSum))
+                .at_least(1)
+                .map(move |cons| Item::TypeDefinition(TypeDefinition::new(name.clone(), vars.clone(), cons)))
+        });
+
+    let type_dec_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::OfType))
-        .then(type_parser());
+        .then(type_parser())
+        .map(|(name, m)| Item::TypeDeclaration(name, m));
 
     let item_parser = choice((
-        type_def_parser
-            .map(|((name, vars), cons)| Item::TypeDefinition(TypeDefinition::new(name, vars, cons))),
-        term_def_parser.map(|(name, t)| Item::TermDefinition(name, t)),
-        builtin_def_parser.map(Item::BuiltInDefinition),
-        dec_parser.map(|(name, m)| Item::TypeDeclaration(name, m)),
+        type_def_parser,
+        term_def_parser,
+        builtin_def_parser,
+        type_dec_parser,
     ));
 
     item_parser

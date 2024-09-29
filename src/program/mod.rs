@@ -7,16 +7,16 @@ mod value;
 pub use built_in::BuiltInFn;
 pub use expression::Expression;
 pub use item::Item;
-pub use type_definition::{DataConstructor, TypeDefinition, TypeDefinitionError};
+pub use type_definition::{TypeDefinition, TypeDefinitionError};
 pub use value::{Value, ValueConversionError};
 
 use crate::kind_inference::{self, KindError};
 use crate::model::term::Term;
 use crate::model::typing::{Kind, PolyType};
-use crate::model::Environment;
+use crate::model::{DataConstructor, Environment};
 use crate::type_inference::TypeError;
 use crate::{interpreter, type_inference};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 #[derive(Clone)]
@@ -24,8 +24,8 @@ pub struct Program {
     main: Term,
     global: Environment<Expression>,
     types: Environment<PolyType>,
+    data_constructors: Environment<DataConstructor>,
     type_constructors: Environment<Kind>,
-    built_ins: Vec<BuiltInFn>,
 }
 
 #[derive(Clone, Error, Debug)]
@@ -56,58 +56,59 @@ impl Program {
     pub fn new(items: impl IntoIterator<Item = item::Item>) -> Result<Self> {
         let mut main = None;
         let mut term_definitions = Vec::new();
-        let mut data_constructors = Vec::new();
-        let mut built_ins = Vec::<BuiltInFn>::new();
+        let mut value_definitions = HashMap::new();
         let mut types = Environment::new();
+        let mut data_constructors = Environment::new();
         let mut type_constructors = Environment::new();
-        let mut used_term_def_names = HashSet::new();
+        let mut used_expr_def_names = HashSet::new();
         type_constructors += ("Unit".to_owned(), Kind::Type);
         type_constructors += ("Int".to_owned(), Kind::Type);
         for item in items {
             match item {
                 Item::TermDefinition(name, term) => {
-                    if used_term_def_names.contains(&name) {
+                    if used_expr_def_names.contains(&name) {
                         return Err(ProgramError::DuplicateDefinition(name));
                     } else if name == "main" {
-                        used_term_def_names.insert(name);
+                        used_expr_def_names.insert(name);
                         main = Some(term);
                     } else {
-                        used_term_def_names.insert(name.clone());
+                        used_expr_def_names.insert(name.clone());
                         term_definitions.push((name, term));
                     }
                 }
                 Item::BuiltInDefinition(name) => {
-                    if used_term_def_names.contains(&name) {
+                    if used_expr_def_names.contains(&name) {
                         return Err(ProgramError::DuplicateDefinition(name));
                     }
                     let Some(fun) = built_in::BUILT_INS.get(&name).cloned() else {
                         return Err(ProgramError::UnknownBuiltIn(name));
                     };
-                    used_term_def_names.insert(name);
-                    built_ins.push(fun);
+                    used_expr_def_names.insert(name.clone());
+                    value_definitions.insert(name, fun.into());
                 }
-                Item::TypeDefinition(type_def) => {
+                Item::TypeDefinition(mut type_def) => {
                     if type_constructors.contains_name(&type_def.name) {
                         return Err(ProgramError::DuplicateDefinition(type_def.name));
                     }
 
-                    let (constructor_definitions, constructor_types) = type_def
-                        .to_data_constructors(&mut type_constructors)
+                    let kind = type_def
+                        .infer_kind(&type_constructors)
                         .map_err(ProgramError::TypeDefinitionError)?;
+                    type_constructors += (type_def.name, kind);
 
-                    if let Some(name) = constructor_types.names().find(|&name| types.contains_name(name)) {
-                        return Err(ProgramError::DuplicateSignature(name.clone()));
-                    }
-                    if let Some(name) = constructor_definitions
-                        .names()
-                        .find(|&name| used_term_def_names.contains(name))
-                    {
-                        return Err(ProgramError::DuplicateDefinition(name.clone()));
-                    }
+                    for con in type_def.constructors {
+                        if types.contains_name(&con.name) {
+                            return Err(ProgramError::DuplicateSignature(con.name));
+                        }
+                        if used_expr_def_names.contains(&con.name) {
+                            return Err(ProgramError::DuplicateDefinition(con.name));
+                        }
 
-                    used_term_def_names.extend(constructor_definitions.names().cloned());
-                    data_constructors.extend(constructor_definitions);
-                    types.extend(constructor_types);
+                        used_expr_def_names.insert(con.name.clone());
+                        value_definitions.insert(con.name.clone(), con.get_value());
+                        types += (con.name.clone(), con.get_type(&type_def.vars));
+                        data_constructors += (con.name.clone(), con);
+                    }
                 }
                 Item::TypeDeclaration(name, m) => {
                     if types.contains_name(&name) {
@@ -118,11 +119,11 @@ impl Program {
                 }
             }
         }
-        if let Some(name) = types.names().find(|&name| !used_term_def_names.contains(name)) {
+        if let Some(name) = types.names().find(|&name| !used_expr_def_names.contains(name)) {
             return Err(ProgramError::MissingDefinition(name.clone()));
         }
-        if let Some(f) = built_ins.iter().find(|f| !types.contains_name(f.name())) {
-            return Err(ProgramError::BuiltInMissingSignature(f.name().to_owned()));
+        if let Some(name) = value_definitions.keys().find(|name| !types.contains_name(name)) {
+            return Err(ProgramError::BuiltInMissingSignature(name.clone()));
         }
 
         let main = main.ok_or(ProgramError::NoMain)?;
@@ -147,20 +148,28 @@ impl Program {
             global: term_definitions
                 .into_iter()
                 .map(|(name, term)| (name, Expression::Term(term)))
-                .chain(data_constructors)
+                .chain(
+                    value_definitions
+                        .into_iter()
+                        .map(|(name, value)| (name, Expression::Value(value))),
+                )
                 .collect(),
             types,
+            data_constructors,
             type_constructors,
-            built_ins,
         })
     }
 
     pub fn run(&self) -> interpreter::Result<Value> {
-        interpreter::eval(self.main.clone().into(), &self.global, &self.built_ins)
+        interpreter::eval(self.main.clone().into(), &self.global)
     }
 
     pub fn types(&self) -> &Environment<PolyType> {
         &self.types
+    }
+
+    pub fn data_constructors(&self) -> &Environment<DataConstructor> {
+        &self.data_constructors
     }
 
     pub fn type_constructors(&self) -> &Environment<Kind> {
