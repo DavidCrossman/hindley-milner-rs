@@ -138,6 +138,12 @@ fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
             Token::Int(n) => Term::Lit(Literal::Int(n)),
         };
 
+        let small_term1_parser = choice((literal_parser, var_parser, paren_parser(term_parser.clone())));
+
+        let small_term_parser = (small_term1_parser.clone())
+            .then(small_term1_parser.clone().repeated())
+            .foldl(|t1, t2| Term::App(Box::new(t1), Box::new(t2)));
+
         let abs_parser = just(Token::Lambda)
             .ignore_then(binding_parser().repeated().at_least(1))
             .then_ignore(just(Token::Arrow))
@@ -147,7 +153,7 @@ fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
         let let_parser = just(Token::Let)
             .ignore_then(binding_parser())
             .then_ignore(just(Token::Assign))
-            .then(term_parser.clone())
+            .then(small_term_parser.clone())
             .then_ignore(just(Token::In))
             .then(term_parser.clone())
             .map(|((b, t1), t2)| Term::Let(b, Box::new(t1), Box::new(t2)));
@@ -157,7 +163,7 @@ fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
             .then(binding_parser())
             .then(binding_parser().repeated())
             .then_ignore(just(Token::Assign))
-            .then(term_parser.clone())
+            .then(small_term_parser.clone())
             .then_ignore(just(Token::In))
             .then(term_parser.clone())
             .map(|((((f, b), bs), t1), t2)| {
@@ -175,25 +181,18 @@ fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
             .map(|(constructor, bindings)| Pattern::new(constructor, bindings));
 
         let match_parser = just(Token::Match)
-            .ignore_then(term_parser.clone())
+            .ignore_then(small_term_parser.clone())
             .then_ignore(just(Token::With))
             .then(
                 pattern_parser
                     .then_ignore(just(Token::FatArrow))
-                    .then(term_parser.clone())
+                    .then(small_term_parser.clone())
                     .separated_by(just(Token::Separator))
                     .at_least(1),
             )
             .map(|(term, arms)| Term::Match(Box::new(term), arms));
 
-        let term1_parser = choice((
-            literal_parser,
-            var_parser,
-            abs_parser,
-            let_parser,
-            match_parser,
-            paren_parser(term_parser),
-        ));
+        let term1_parser = choice((abs_parser, let_parser, match_parser, small_term1_parser));
 
         (term1_parser.clone())
             .then(term1_parser.repeated())
