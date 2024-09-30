@@ -1,4 +1,4 @@
-use crate::model::term::{Binding, Term};
+use crate::model::term::{Binding, Pattern, Term};
 use crate::model::Environment;
 use crate::program::{Expression, Value};
 use std::fmt::Display;
@@ -8,6 +8,7 @@ use thiserror::Error;
 pub enum Frame {
     HApp(Term, Environment<Value>),
     AppH(Value),
+    HMatch(Vec<(Pattern, Term)>, Environment<Value>),
 }
 
 #[derive(Error, Debug)]
@@ -19,6 +20,10 @@ pub enum EvalError {
     InvalidState(Expression, Environment<Value>, Option<Frame>),
     #[error("error in built-in function '{0}'")]
     BuiltIn(String, #[source] anyhow::Error),
+    #[error("could not find arm in match expression for constructor '{0}'")]
+    MissingMatchArm(String),
+    #[error("cannot match with non-data value: {0}")]
+    InvalidMatchValue(Value),
 }
 
 pub type Result<T> = std::result::Result<T, EvalError>;
@@ -30,6 +35,10 @@ impl Display for Frame {
         match self {
             Self::HApp(t, env) => write!(f, "HApp ({t}) {env}"),
             Self::AppH(v) => write!(f, "AppH ({v})"),
+            Self::HMatch(arms, env) => {
+                let arms = arms.iter().map(|(p, t)| format!("{p} ⇒ {t}")).collect::<Vec<_>>();
+                write!(f, "HMatch [{}] {env}", arms.join(","))
+            }
         }
     }
 }
@@ -61,7 +70,10 @@ fn eval1((expr, mut env, mut k): State, global: &Environment<Expression>) -> Res
             Ok((Term(*t1), env, k))
         }
         Term(Let(x, t1, t2)) => Ok((Term(App(Box::new(Abs(x, t2)), t1)), env, k)),
-        e @ Term(Match(_, _)) => Err(EvalError::InvalidState(e, env, k.pop())),
+        Term(Match(t, arms)) => {
+            k.push(Frame::HMatch(arms, env.clone()));
+            Ok((Term(*t), env, k))
+        }
         Value(v) => match k.pop() {
             Some(Frame::HApp(t, env)) => {
                 k.push(Frame::AppH(v));
@@ -82,6 +94,20 @@ fn eval1((expr, mut env, mut k): State, global: &Environment<Expression>) -> Res
             }
             Some(Frame::AppH(BuiltIn(fun))) => Ok((Value(fun.apply(v)?), env, k)),
             Some(f @ Frame::AppH(_)) => Err(EvalError::InvalidState(Value(v), env, Some(f))),
+            Some(Frame::HMatch(arms, mut env)) => {
+                let self::Value::Data(name, values) = v else {
+                    return Err(EvalError::InvalidMatchValue(v));
+                };
+                let Some((pat, t)) = arms.into_iter().find(|(pat, _)| pat.constructor == name) else {
+                    return Err(EvalError::MissingMatchArm(name));
+                };
+                for (b, v) in pat.bindings.into_iter().zip(values) {
+                    if let Binding::Var(x) = b {
+                        env += (x, (*v).clone());
+                    }
+                }
+                Ok((Term(t), env, k))
+            }
             None => Ok((Value(v), env, k)),
         },
     }
