@@ -57,10 +57,46 @@ pub fn w(
             let s2 = unify(beta.substitute(&s1), m1.clone())?;
             Ok((s1.combine(&s2), m1.substitute(&s2), n))
         }
-        Term::Match(_, _) => todo!(),
+        Term::Match(t, arms) => {
+            let mut beta = MonoType::Var(n.into());
+            let (mut s, mono, mut n) = w(env, t, data_cons, n + 1)?;
+            for (pat, t) in arms {
+                let data_con = data_cons
+                    .get(&pat.constructor)
+                    .ok_or(TypeError::UnknownDataConstructor(pat.constructor.clone()))?;
+
+                s.combine_mut(&unify(
+                    mono.clone().substitute(&s),
+                    data_con.return_type.clone().substitute(&s),
+                )?);
+
+                if pat.bindings.len() != data_con.params.len() {
+                    return Err(TypeError::IncorrectPatternParameters(
+                        data_con.name.clone(),
+                        data_con.params.len(),
+                        pat.bindings.len(),
+                    ));
+                }
+
+                let mut env = env.clone().substitute(&s);
+                for (b, m) in pat.bindings.iter().zip(&data_con.params) {
+                    if let Binding::Var(x) = b {
+                        env += (x.clone(), m.clone().into());
+                    }
+                }
+
+                let (s2, m2, n2) = w(&env, t, data_cons, n)?;
+                n = n2;
+                s.combine_mut(&s2);
+                beta.substitute_mut(&s);
+                s.combine_mut(&unify(beta.clone(), m2)?);
+            }
+
+            check_match_exhaustive(&mono.substitute(&s), data_cons, arms)?;
+            Ok((s, beta, n))
+        }
     }
 }
-
 pub fn m(
     env: &Environment<PolyType>,
     term: &Term,

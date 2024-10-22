@@ -15,7 +15,7 @@ pub enum TypeError {
     #[error("variable '{0}' is not defined")]
     UnknownVariable(String),
     #[error("data constructor '{0}' is not defined")]
-    UnknownDataConstructor(String), // merge with var?
+    UnknownDataConstructor(String),
     #[error("cannot construct infinite type {0} = {1}")]
     InfiniteType(Variable, MonoType),
     #[error("expected type {0}, found {1}")]
