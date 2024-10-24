@@ -22,6 +22,6 @@ fn main() {
             },
             Err(e) => println!("parse error: {e:?}"),
         },
-        Err(e) => println!("lexical error: {e:?}"),
+        Err(e) => println!("lexical error: {:?}", anyhow::Error::from(e)),
     }
 }

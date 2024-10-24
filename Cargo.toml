@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.91"
 chumsky = "0.9.3"
+logos = "0.14.2"
 thiserror = "1.0.65"

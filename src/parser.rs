@@ -86,7 +86,7 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
 
     item_parser
         .separated_by(just(Token::Separator))
-        .padded_by(just(Token::Separator).repeated())
+        .then_ignore(just(Token::Separator).or_not())
         .then_ignore(end())
 }
 

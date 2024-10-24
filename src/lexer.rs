@@ -1,100 +1,91 @@
-use chumsky::{prelude::*, text::newline};
+use logos::{Filter, Lexer, Logos};
+use std::num::ParseIntError;
+use thiserror::Error;
 
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+#[derive(Error, Default, Clone, PartialEq, Debug)]
+pub enum LexErrorKind {
+    #[default]
+    #[error("unknown character")]
+    UnknownCharacter,
+    #[error("integer error")]
+    IntError(#[source] ParseIntError),
+}
+
+#[derive(Error, Clone, PartialEq, Debug)]
+#[error("error tokenising lexeme '{lexeme}'")]
+pub struct LexError<'a> {
+    lexeme: &'a str,
+    source: LexErrorKind,
+}
+
+impl From<ParseIntError> for LexErrorKind {
+    fn from(value: ParseIntError) -> Self {
+        Self::IntError(value)
+    }
+}
+
+fn keep_newline(lex: &mut Lexer<Token>) {
+    lex.extras = true;
+}
+
+fn ignore_newline(lex: &mut Lexer<Token>) {
+    lex.extras = false;
+}
+
+#[derive(Logos, Hash, PartialEq, Eq, Clone, Debug)]
+#[logos(extras = bool)]
+#[logos(error = LexErrorKind)]
+#[logos(skip r"[\s--\n]")]
 pub enum Token {
+    #[token("=", ignore_newline)]
     Assign,
+    #[token(":", keep_newline)]
     OfType,
+    #[token("type", keep_newline)]
     TypeDef,
+    #[token("+", ignore_newline)]
     TypeSum,
+    #[token("(", ignore_newline)]
     LeftParen,
+    #[token(")", keep_newline)]
     RightParen,
+    #[regex(r"λ|\\", keep_newline)]
     Lambda,
+    #[regex(r"->|→", ignore_newline)]
     Arrow,
+    #[token("let", keep_newline)]
     Let,
+    #[token("in", ignore_newline)]
     In,
+    #[token("match", keep_newline)]
     Match,
+    #[token("with", ignore_newline)]
     With,
+    #[regex(r"=>|⇒", ignore_newline)]
     FatArrow,
+    #[token("builtin", keep_newline)]
     BuiltIn,
+    #[token("()", keep_newline)]
     Unit,
+    #[regex(r"[0-9]+", |lex| { keep_newline(lex); lex.slice().parse() })]
     Int(i64),
+    #[regex(r"[A-Za-z][A-Za-z0-9]*", |lex| { keep_newline(lex); lex.slice().to_owned() })]
     Ident(String),
+    #[regex(r"_[A-Za-z0-9_]*", keep_newline)]
     Discard,
+    #[token(";", ignore_newline)]
+    #[regex(r"\n+", |lex| if lex.extras { Filter::Emit(()) } else { Filter::Skip })]
     Separator,
 }
 
-#[derive(Hash, PartialEq, Eq, Clone, Debug)]
-enum PaddedToken {
-    Tok(Token),
-    Newline,
-}
-
-pub fn lex(source: &str) -> Result<Vec<Token>, Vec<Simple<char>>> {
+pub fn lex(source: &str) -> Result<Vec<Token>, LexError> {
+    let mut lexer = Token::lexer(source);
     let mut tokens = Vec::new();
-    lexer().parse(source)?.into_iter().for_each(|t| match t {
-        PaddedToken::Tok(t) => tokens.push(t),
-        PaddedToken::Newline => {
-            use Token::*;
-            if tokens.last().is_some_and(|t| {
-                matches!(
-                    t,
-                    TypeDef
-                        | Lambda
-                        | Let
-                        | Match
-                        | BuiltIn
-                        | Ident(_)
-                        | Discard
-                        | Unit
-                        | Int(_)
-                        | RightParen
-                )
-            }) {
-                tokens.push(Token::Separator);
-            }
-        }
-    });
+    while let Some(token) = lexer.next() {
+        tokens.push(token.map_err(|source| LexError {
+            lexeme: lexer.slice(),
+            source,
+        })?);
+    }
     Ok(tokens)
-}
-
-fn lexer() -> impl Parser<char, Vec<PaddedToken>, Error = Simple<char>> + Clone {
-    let ident_lexer = filter(char::is_ascii_alphabetic)
-        .chain::<char, _, _>(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
-        .collect();
-
-    let token_lexer = choice((
-        text::keyword("type").to(Token::TypeDef),
-        text::keyword("let").to(Token::Let),
-        text::keyword("in").to(Token::In),
-        text::keyword("match").to(Token::Match),
-        text::keyword("with").to(Token::With),
-        text::keyword("builtin").to(Token::BuiltIn),
-        just("()").to(Token::Unit),
-        one_of("λ\\").to(Token::Lambda),
-        just("->").or(just("→")).to(Token::Arrow),
-        just("=>").or(just("⇒")).to(Token::FatArrow),
-        just('=').to(Token::Assign),
-        just('+').to(Token::TypeSum),
-        just(':').to(Token::OfType),
-        just('(').to(Token::LeftParen),
-        just(')').to(Token::RightParen),
-        just(';').to(Token::Separator),
-        text::digits(10).try_map(|x: String, span| {
-            x.parse()
-                .map(Token::Int)
-                .map_err(|e| Simple::custom(span, format!("{e}")))
-        }),
-        ident_lexer.map(Token::Ident),
-        just('_')
-            .then(filter(|c: &char| c.is_ascii_alphanumeric() || c == &'_').repeated())
-            .to(Token::Discard),
-    ));
-
-    let tokens_lexer = token_lexer
-        .map(PaddedToken::Tok)
-        .or(newline().to(PaddedToken::Newline))
-        .padded_by(filter(|c: &char| c != &'\n' && c.is_whitespace()).repeated())
-        .repeated();
-
-    tokens_lexer.then_ignore(end())
 }
