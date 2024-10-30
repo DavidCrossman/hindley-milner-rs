@@ -59,10 +59,12 @@ fn eval1((expr, mut env, mut k): State, global: &Environment<Expression>) -> Res
     use Expression::{Term, Value};
     match expr {
         Term(Lit(lit)) => Ok((Value(lit.into()), env, k)),
-        Term(Var(x)) => (env.remove(&x).map(Value))
-            .or_else(|| global.get(&x).cloned())
-            .ok_or(EvalError::UnknownVariable(x))
-            .map(|e| (e, env, k)),
+        Term(Var(x)) => match env.remove(&x) {
+            Some(v) => Ok((Value(v), env, k)),
+            None => (global.get(&x))
+                .map(|e| (e.clone(), Environment::new(), k))
+                .ok_or(EvalError::UnknownVariable(x)),
+        },
         Term(Abs(b, t)) => Ok((Value(Closure(b, *t, env)), Environment::new(), k)),
         Term(Fix(f, b, t)) => Ok((Value(FixClosure(f, b, *t, env)), Environment::new(), k)),
         Term(App(t1, t2)) => {
