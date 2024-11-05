@@ -8,7 +8,7 @@ pub enum LexErrorKind {
     #[error("unknown character")]
     UnknownCharacter,
     #[error("integer error")]
-    IntError(#[source] ParseIntError),
+    IntError(#[from] ParseIntError),
 }
 
 #[derive(Error, Clone, PartialEq, Debug)]
@@ -16,12 +16,6 @@ pub enum LexErrorKind {
 pub struct LexError<'a> {
     lexeme: &'a str,
     source: LexErrorKind,
-}
-
-impl From<ParseIntError> for LexErrorKind {
-    fn from(value: ParseIntError) -> Self {
-        Self::IntError(value)
-    }
 }
 
 fn keep_newline(lex: &mut Lexer<Token>) {
