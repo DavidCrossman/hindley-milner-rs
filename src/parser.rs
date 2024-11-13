@@ -5,31 +5,31 @@ use crate::model::{DataConstructor, FreeVariable};
 use crate::program::{Item, TypeDefinition};
 use chumsky::{prelude::*, Error};
 
-pub fn parse(tokens: &[Token]) -> Result<Vec<Item>, Vec<Simple<Token>>> {
+pub fn parse<'source>(tokens: &[Token<'source>]) -> Result<Vec<Item>, Vec<Simple<Token<'source>>>> {
     items_parser().parse(tokens)
 }
 
-fn binding_parser() -> impl Parser<Token, Binding, Error = Simple<Token>> + Copy {
+fn binding_parser<'source>() -> impl Parser<Token<'source>, Binding, Error = Simple<Token<'source>>> + Copy {
     select! {
-        Token::Ident(x) => Binding::Var(x),
+        Token::Ident(x) => Binding::Var(x.to_owned()),
         Token::Discard => Binding::Discard,
     }
 }
 
-fn paren_parser<O, E: Error<Token>>(
-    inner: impl Parser<Token, O, Error = E> + Clone,
-) -> impl Parser<Token, O, Error = E> + Clone {
+fn paren_parser<'source, O, E: Error<Token<'source>>>(
+    inner: impl Parser<Token<'source>, O, Error = E> + Clone,
+) -> impl Parser<Token<'source>, O, Error = E> + Clone {
     inner.delimited_by(
         just(Token::LeftParen),
         just(Token::Separator).or_not().then(just(Token::RightParen)),
     )
 }
 
-fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
+fn items_parser<'source>() -> impl Parser<Token<'source>, Vec<Item>, Error = Simple<Token<'source>>> {
     let term_def_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::Assign))
         .then(term_parser())
-        .map(|(name, t)| Item::TermDefinition(name, t));
+        .map(|(name, t)| Item::TermDefinition(name.to_owned(), t));
 
     let term_def_parser = term_def_parser.or(select! {Token::Ident(f) => f}
         .then(binding_parser())
@@ -38,44 +38,49 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
         .then(term_parser())
         .map(|(((name, b), bs), t)| {
             let t = bs.into_iter().rev().fold(t, |t, b| Term::Abs(b, Box::new(t)));
-            let t = if b != name.clone().into() && t.free_vars().contains(&name) {
-                Term::Fix(name.clone(), b, Box::new(t))
+            let t = if !matches!(&b, Binding::Var(x) if x == name) && t.free_vars().contains(&name.to_owned())
+            {
+                Term::Fix(name.to_owned(), b, Box::new(t))
             } else {
                 Term::Abs(b, Box::new(t))
             };
-            Item::TermDefinition(name, t)
+            Item::TermDefinition(name.to_owned(), t)
         }));
 
-    let builtin_def_parser = select! {Token::Ident(x) => x}
+    let builtin_def_parser = select! {Token::Ident(x) => x.to_owned()}
         .then_ignore(just(Token::Assign))
         .then_ignore(just(Token::BuiltIn))
         .map(Item::BuiltInDefinition);
 
     let type_def_parser = just(Token::TypeDef)
         .ignore_then(select! {Token::Ident(x) => x})
-        .then(select! {Token::Ident(x) => x}.map(Variable::Named).repeated())
+        .then((select! {Token::Ident(x) => x.to_owned()}.map(Variable::Named)).repeated())
         .then_ignore(just(Token::Assign))
         .then_with(|(name, vars)| {
-            let return_type = vars.iter().fold(MonoType::Con(name.clone()), |m, v| {
+            let return_type = vars.iter().fold(MonoType::Con(name.to_owned()), |m, v| {
                 MonoType::App(Box::new(m), Box::new(MonoType::Var(v.clone())))
             });
 
             let data_con_parser = {
                 select! {Token::Ident(x) => x}
                     .then(type_atom_parser().repeated())
-                    .map(move |(name, params)| DataConstructor::new(name, return_type.clone(), params))
+                    .map(move |(name, params)| {
+                        DataConstructor::new(name.to_owned(), return_type.clone(), params)
+                    })
             };
 
             data_con_parser
                 .separated_by(just(Token::TypeSum))
                 .at_least(1)
-                .map(move |cons| Item::TypeDefinition(TypeDefinition::new(name.clone(), vars.clone(), cons)))
+                .map(move |cons| {
+                    Item::TypeDefinition(TypeDefinition::new(name.to_owned(), vars.clone(), cons))
+                })
         });
 
     let type_dec_parser = select! {Token::Ident(x) => x}
         .then_ignore(just(Token::OfType))
         .then(type_parser())
-        .map(|(name, m)| Item::TypeDeclaration(name, m));
+        .map(|(name, m)| Item::TypeDeclaration(name.to_owned(), m));
 
     let item_parser = choice((
         type_def_parser,
@@ -90,22 +95,23 @@ fn items_parser() -> impl Parser<Token, Vec<Item>, Error = Simple<Token>> {
         .then_ignore(end())
 }
 
-fn type_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
+fn type_parser<'source>() -> impl Parser<Token<'source>, MonoType, Error = Simple<Token<'source>>> + Clone {
     create_type_parsers().1
 }
 
-fn type_atom_parser() -> impl Parser<Token, MonoType, Error = Simple<Token>> + Clone {
+fn type_atom_parser<'source>() -> impl Parser<Token<'source>, MonoType, Error = Simple<Token<'source>>> + Clone
+{
     create_type_parsers().0
 }
 
-fn create_type_parsers() -> (
-    impl Parser<Token, MonoType, Error = Simple<Token>> + Clone,
-    impl Parser<Token, MonoType, Error = Simple<Token>> + Clone,
+fn create_type_parsers<'source>() -> (
+    impl Parser<Token<'source>, MonoType, Error = Simple<Token<'source>>> + Clone,
+    impl Parser<Token<'source>, MonoType, Error = Simple<Token<'source>>> + Clone,
 ) {
     let mut atom = Recursive::declare();
     let mut type_parser = Recursive::declare();
 
-    let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.into()) };
+    let ident_parser = select! {Token::Ident(x) => MonoType::Var(x.to_owned().into()) };
 
     let arrow_parser = just(Token::Arrow)
         .delimited_by(just(Token::LeftParen), just(Token::RightParen))
@@ -129,9 +135,9 @@ fn create_type_parsers() -> (
     (atom, type_parser)
 }
 
-fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
+fn term_parser<'source>() -> impl Parser<Token<'source>, Term, Error = Simple<Token<'source>>> + Clone {
     recursive(|term_parser| {
-        let var_parser = select! {Token::Ident(s) => Term::Var(s)};
+        let var_parser = select! {Token::Ident(s) => Term::Var(s.to_owned())};
 
         let literal_parser = select! {
             Token::Unit => Term::Lit(Literal::Unit),
@@ -168,17 +174,18 @@ fn term_parser() -> impl Parser<Token, Term, Error = Simple<Token>> + Clone {
             .then(term_parser.clone())
             .map(|((((f, b), bs), t1), t2)| {
                 let t1 = bs.into_iter().rev().fold(t1, |t, b| Term::Abs(b, Box::new(t)));
-                let t1 = if b != f.clone().into() && t1.free_vars().contains(&f) {
-                    Term::Fix(f.clone(), b, Box::new(t1))
+                let t1 = if !matches!(&b, Binding::Var(x) if x == f) && t1.free_vars().contains(&f.to_owned())
+                {
+                    Term::Fix(f.to_owned(), b, Box::new(t1))
                 } else {
                     Term::Abs(b, Box::new(t1))
                 };
-                Term::Let(f.into(), Box::new(t1), Box::new(t2))
+                Term::Let(f.to_owned().into(), Box::new(t1), Box::new(t2))
             }));
 
         let pattern_parser = select! {Token::Ident(x) => x}
             .then(binding_parser().repeated())
-            .map(|(constructor, bindings)| Pattern::new(constructor, bindings));
+            .map(|(constructor, bindings)| Pattern::new(constructor.to_owned(), bindings));
 
         let match_parser = just(Token::Match)
             .ignore_then(small_term_parser.clone())

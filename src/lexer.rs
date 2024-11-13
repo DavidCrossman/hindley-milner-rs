@@ -2,7 +2,7 @@ use logos::{Filter, Lexer, Logos};
 use std::num::ParseIntError;
 use thiserror::Error;
 
-#[derive(Error, Default, Clone, PartialEq, Debug)]
+#[derive(Error, Default, Clone, PartialEq, Eq, Debug)]
 pub enum LexErrorKind {
     #[default]
     #[error("unknown character")]
@@ -18,11 +18,11 @@ pub struct LexError<'a> {
     source: LexErrorKind,
 }
 
-fn keep_newline(lex: &mut Lexer<Token>) {
+fn emit_eol<'source>(lex: &mut Lexer<'source, Token<'source>>) {
     lex.extras = true;
 }
 
-fn ignore_newline(lex: &mut Lexer<Token>) {
+fn skip_eol<'source>(lex: &mut Lexer<'source, Token<'source>>) {
     lex.extras = false;
 }
 
@@ -30,44 +30,44 @@ fn ignore_newline(lex: &mut Lexer<Token>) {
 #[logos(extras = bool)]
 #[logos(error = LexErrorKind)]
 #[logos(skip r"[\s--\n]")]
-pub enum Token {
-    #[token("=", ignore_newline)]
+pub enum Token<'source> {
+    #[token("=", skip_eol)]
     Assign,
-    #[token(":", keep_newline)]
+    #[token(":", emit_eol)]
     OfType,
-    #[token("type", keep_newline)]
+    #[token("type", emit_eol)]
     TypeDef,
-    #[token("+", ignore_newline)]
+    #[token("+", skip_eol)]
     TypeSum,
-    #[token("(", ignore_newline)]
+    #[token("(", skip_eol)]
     LeftParen,
-    #[token(")", keep_newline)]
+    #[token(")", emit_eol)]
     RightParen,
-    #[regex(r"λ|\\", keep_newline)]
+    #[regex(r"λ|\\", emit_eol)]
     Lambda,
-    #[regex(r"->|→", ignore_newline)]
+    #[regex(r"->|→", skip_eol)]
     Arrow,
-    #[token("let", keep_newline)]
+    #[token("let", emit_eol)]
     Let,
-    #[token("in", ignore_newline)]
+    #[token("in", skip_eol)]
     In,
-    #[token("match", keep_newline)]
+    #[token("match", emit_eol)]
     Match,
-    #[token("with", ignore_newline)]
+    #[token("with", skip_eol)]
     With,
-    #[regex(r"=>|⇒", ignore_newline)]
+    #[regex(r"=>|⇒", skip_eol)]
     FatArrow,
-    #[token("builtin", keep_newline)]
+    #[token("builtin", emit_eol)]
     BuiltIn,
-    #[token("()", keep_newline)]
+    #[token("()", emit_eol)]
     Unit,
-    #[regex(r"[0-9]+", |lex| { keep_newline(lex); lex.slice().parse() })]
+    #[regex(r"[0-9]+", |lex| { emit_eol(lex); lex.slice().parse() })]
     Int(i64),
-    #[regex(r"[A-Za-z][A-Za-z0-9]*", |lex| { keep_newline(lex); lex.slice().to_owned() })]
-    Ident(String),
-    #[regex(r"_[A-Za-z0-9_]*", keep_newline)]
+    #[regex(r"[A-Za-z][A-Za-z0-9]*", |lex| { emit_eol(lex); lex.slice() })]
+    Ident(&'source str),
+    #[regex(r"_[A-Za-z0-9_]*", emit_eol)]
     Discard,
-    #[token(";", ignore_newline)]
+    #[token(";", skip_eol)]
     #[regex(r"\n+", |lex| if lex.extras { Filter::Emit(()) } else { Filter::Skip })]
     Separator,
 }
