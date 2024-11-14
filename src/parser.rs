@@ -38,8 +38,7 @@ fn items_parser<'source>() -> impl Parser<Token<'source>, Vec<Item>, Error = Sim
         .then(term_parser())
         .map(|(((name, b), bs), t)| {
             let t = bs.into_iter().rev().fold(t, |t, b| Term::Abs(b, Box::new(t)));
-            let t = if !matches!(&b, Binding::Var(x) if x == name) && t.free_vars().contains(&name.to_owned())
-            {
+            let t = if !matches!(&b, Binding::Var(x) if x == name) && t.free_vars().contains(name) {
                 Term::Fix(name.to_owned(), b, Box::new(t))
             } else {
                 Term::Abs(b, Box::new(t))
@@ -174,8 +173,7 @@ fn term_parser<'source>() -> impl Parser<Token<'source>, Term, Error = Simple<To
             .then(term_parser.clone())
             .map(|((((f, b), bs), t1), t2)| {
                 let t1 = bs.into_iter().rev().fold(t1, |t, b| Term::Abs(b, Box::new(t)));
-                let t1 = if !matches!(&b, Binding::Var(x) if x == f) && t1.free_vars().contains(&f.to_owned())
-                {
+                let t1 = if !matches!(&b, Binding::Var(x) if x == f) && t1.free_vars().contains(f) {
                     Term::Fix(f.to_owned(), b, Box::new(t1))
                 } else {
                     Term::Abs(b, Box::new(t1))
