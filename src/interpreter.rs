@@ -15,8 +15,8 @@ pub enum Frame {
 pub enum EvalError {
     #[error("variable '{0}' is not defined")]
     UnknownVariable(String),
-    #[error("invalid state: expression = {0}; environment = {1}; next frame = {}",
-        .2.as_ref().map_or("None".to_owned(), ToString::to_string))]
+    #[error("invalid state: expression = {0}; environment = {1}; next frame = {frame}",
+        frame = .2.as_ref().map_or("None".to_owned(), ToString::to_string))]
     InvalidState(Expression, Environment<Value>, Option<Frame>),
     #[error("error in built-in function '{0}'")]
     BuiltIn(String, #[source] anyhow::Error),
