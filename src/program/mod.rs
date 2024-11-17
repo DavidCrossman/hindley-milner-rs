@@ -36,8 +36,6 @@ pub enum ProgramError {
     MissingDefinition(String),
     #[error("unknown built-in function '{0}'")]
     UnknownBuiltIn(String),
-    #[error("missing type signature for built-in function '{0}'")]
-    BuiltInMissingSignature(String),
     #[error("duplicate definitions for '{0}'")]
     DuplicateDefinition(String),
     #[error("duplicate type signatures for '{0}'")]
@@ -76,7 +74,7 @@ impl Program {
                         term_definitions.push((name, term));
                     }
                 }
-                Item::BuiltInDefinition(name) => {
+                Item::BuiltInDefinition(name, m) => {
                     if used_expr_def_names.contains(&name) {
                         return Err(ProgramError::DuplicateDefinition(name));
                     }
@@ -84,7 +82,9 @@ impl Program {
                         return Err(ProgramError::UnknownBuiltIn(name));
                     };
                     used_expr_def_names.insert(name.clone());
-                    value_definitions.insert(name, fun.into());
+                    value_definitions.insert(name.clone(), fun.into());
+                    let p = m.substitute_constructors(&type_constructors).generalise(&types);
+                    types += (name, p);
                 }
                 Item::TypeDefinition(mut type_def) => {
                     if type_constructors.contains_name(&type_def.name) {
@@ -121,9 +121,6 @@ impl Program {
         }
         if let Some(name) = types.names().find(|&name| !used_expr_def_names.contains(name)) {
             return Err(ProgramError::MissingDefinition(name.clone()));
-        }
-        if let Some(name) = value_definitions.keys().find(|name| !types.contains_name(name)) {
-            return Err(ProgramError::BuiltInMissingSignature(name.clone()));
         }
 
         let main = main.ok_or(ProgramError::NoMain)?;

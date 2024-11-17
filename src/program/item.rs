@@ -7,7 +7,7 @@ use std::fmt::Display;
 pub enum Item {
     TypeDefinition(TypeDefinition),
     TermDefinition(String, Term),
-    BuiltInDefinition(String),
+    BuiltInDefinition(String, MonoType),
     TypeDeclaration(String, MonoType),
 }
 
@@ -16,7 +16,7 @@ impl Display for Item {
         match self {
             Self::TypeDefinition(type_def) => type_def.fmt(f),
             Self::TermDefinition(name, term) => write!(f, "{name} = {term}"),
-            Self::BuiltInDefinition(name) => write!(f, "{name} = builtin"),
+            Self::BuiltInDefinition(name, mono) => write!(f, "builtin {name} : {mono}"),
             Self::TypeDeclaration(name, mono) => write!(f, "{name} : {mono}"),
         }
     }

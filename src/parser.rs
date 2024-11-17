@@ -46,10 +46,11 @@ fn items_parser<'source>() -> impl Parser<Token<'source>, Vec<Item>, Error = Sim
             Item::TermDefinition(name.to_owned(), t)
         }));
 
-    let builtin_def_parser = select! {Token::Ident(x) => x.to_owned()}
-        .then_ignore(just(Token::Assign))
-        .then_ignore(just(Token::BuiltIn))
-        .map(Item::BuiltInDefinition);
+    let builtin_def_parser = just(Token::BuiltIn)
+        .ignore_then(select! {Token::Ident(x) => x.to_owned()})
+        .then_ignore(just(Token::OfType))
+        .then(type_parser())
+        .map(|(name, m)| Item::BuiltInDefinition(name, m));
 
     let type_def_parser = just(Token::TypeDef)
         .ignore_then(select! {Token::Ident(x) => x})
